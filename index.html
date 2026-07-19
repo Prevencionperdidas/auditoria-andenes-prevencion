@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auditoría de Andenes</title>
+<style>
+  :root{
+    --ikea-blue:#0058A3;
+    --ikea-blue-dark:#003D73;
+    --ikea-yellow:#FFDB00;
+    --bg:#F2F4F7;
+    --card:#FFFFFF;
+    --text:#1A1A1A;
+    --muted:#6B7280;
+    --green:#1E8E3E;
+    --red:#D93025;
+    --orange:#E8710A;
+    --border:#E2E5EA;
+    --radius:12px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+  header{
+    background:var(--ikea-blue);
+    color:#fff;
+    padding:14px 16px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    position:sticky;
+    top:0;
+    z-index:50;
+    box-shadow:0 2px 8px rgba(0,0,0,.15);
+  }
+  header .brand{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-weight:800;
+    font-size:17px;
+  }
+  header .brand .sq{
+    background:var(--ikea-yellow);
+    color:var(--ikea-blue-dark);
+    width:30px;height:30px;
+    border-radius:6px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;font-weight:900;
+  }
+  header button.icon-btn{
+    background:rgba(255,255,255,.15);
+    border:none;
+    color:#fff;
+    padding:8px 10px;
+    border-radius:8px;
+    font-size:13px;
+    cursor:pointer;
+  }
+  nav{
+    display:flex;
+    background:#fff;
+    border-bottom:1px solid var(--border);
+    position:sticky;
+    top:58px;
+    z-index:49;
+  }
+  nav button{
+    flex:1;
+    padding:12px 8px;
+    background:none;
+    border:none;
+    font-size:14px;
+    font-weight:700;
+    color:var(--muted);
+    cursor:pointer;
+    border-bottom:3px solid transparent;
+  }
+  nav button.active{
+    color:var(--ikea-blue);
+    border-bottom-color:var(--ikea-blue);
+  }
+  main{
+    max-width:720px;
+    margin:0 auto;
+    padding:16px;
+    padding-bottom:60px;
+  }
+  .card{
+    background:var(--card);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-bottom:14px;
+    border:1px solid var(--border);
+  }
+  .card h3{margin:0 0 12px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+  label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px;}
+  select,input{
+    width:100%;
+    padding:12px;
+    border:1.5px solid var(--border);
+    border-radius:8px;
+    font-size:15px;
+    background:#fff;
+    color:var(--text);
+  }
+  select:focus,input:focus{outline:none;border-color:var(--ikea-blue);}
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    padding:12px 18px;
+    border-radius:8px;
+    border:none;
+    font-weight:700;
+    font-size:14px;
+    cursor:pointer;
+  }
+  .btn-primary{background:var(--ikea-blue);color:#fff;}
+  .btn-secondary{background:#fff;color:var(--ikea-blue);border:1.5px solid var(--ikea-blue);}
+  .btn-yellow{background:var(--ikea-yellow);color:var(--ikea-blue-dark);}
+  .btn-block{width:100%;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+
+  .progress-wrap{margin-top:10px;}
+  .progress-bar{
+    height:10px;
+    background:var(--border);
+    border-radius:6px;
+    overflow:hidden;
+  }
+  .progress-fill{
+    height:100%;
+    background:var(--green);
+    transition:width .3s;
+  }
+  .progress-label{
+    display:flex;
+    justify-content:space-between;
+    font-size:12px;
+    color:var(--muted);
+    margin-top:6px;
+  }
+
+  .scan-box{
+    background:var(--ikea-blue-dark);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-bottom:14px;
+  }
+  .scan-box label{color:#BFD9F2;}
+  .scan-box input{
+    font-size:20px;
+    text-align:center;
+    font-weight:800;
+    letter-spacing:.03em;
+  }
+
+  .iso-list{display:flex;flex-direction:column;gap:8px;}
+  .iso-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:12px 14px;
+    border-radius:8px;
+    border:1.5px solid var(--border);
+    background:#fff;
+  }
+  .iso-row.done{
+    background:#EAF6EC;
+    border-color:#BFE3C4;
+  }
+  .iso-row .code{font-weight:800;font-size:15px;letter-spacing:.02em;}
+  .iso-row .meta{font-size:11px;color:var(--muted);margin-top:2px;}
+  .badge{
+    font-size:11px;
+    font-weight:700;
+    padding:4px 10px;
+    border-radius:20px;
+  }
+  .badge.pend{background:#FFF1D6;color:var(--orange);}
+  .badge.ok{background:#D9F0DC;color:var(--green);}
+  .badge.sync{background:#FDE8E8;color:var(--red);}
+
+  .toast{
+    position:fixed;
+    bottom:24px;
+    left:50%;
+    transform:translateX(-50%);
+    background:#1A1A1A;
+    color:#fff;
+    padding:12px 20px;
+    border-radius:30px;
+    font-size:14px;
+    font-weight:600;
+    z-index:100;
+    box-shadow:0 4px 16px rgba(0,0,0,.25);
+    max-width:90%;
+    text-align:center;
+  }
+  .toast.ok{background:var(--green);}
+  .toast.err{background:var(--red);}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .stat{
+    background:#fff;
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:12px 8px;
+    text-align:center;
+  }
+  .stat .num{font-size:22px;font-weight:800;color:var(--ikea-blue);}
+  .stat .lbl{font-size:11px;color:var(--muted);margin-top:2px;}
+
+  .veh-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:12px 0;
+    border-bottom:1px solid var(--border);
+  }
+  .veh-row:last-child{border-bottom:none;}
+  .veh-row .v-name{font-weight:800;font-size:14px;}
+  .veh-row .v-bar{flex:1;margin:0 12px;}
+  .veh-row .v-pct{font-weight:700;font-size:13px;width:42px;text-align:right;}
+
+  .modal-overlay{
+    position:fixed;inset:0;
+    background:rgba(0,0,0,.5);
+    display:flex;align-items:center;justify-content:center;
+    z-index:200;
+    padding:20px;
+  }
+  .modal{
+    background:#fff;
+    border-radius:var(--radius);
+    padding:20px;
+    max-width:360px;
+    width:100%;
+  }
+  .modal h3{margin-top:0;}
+  .center{text-align:center;}
+  .empty{
+    text-align:center;
+    color:var(--muted);
+    font-size:13px;
+    padding:30px 10px;
+  }
+  .row-gap{display:flex;gap:10px;}
+  .row-gap .btn{flex:1;}
+  .link-btn{
+    background:none;border:none;color:var(--ikea-blue);
+    font-size:13px;font-weight:700;cursor:pointer;padding:0;
+  }
+  .uppercase{text-transform:uppercase;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><span class="sq">IK</span> Auditoría de Andenes</div>
+  <button class="icon-btn" onclick="openConfig()">⚙️ Config</button>
+</header>
+
+<nav>
+  <button id="tab-btn-auditar" class="active" onclick="showTab('auditar')">Auditar</button>
+  <button id="tab-btn-dashboard" onclick="showTab('dashboard')">Dashboard</button>
+</nav>
+
+<main>
+
+  <!-- ================= TAB AUDITAR ================= -->
+  <div id="tab-auditar">
+
+    <div class="card" id="auditor-card">
+      <h3>Auditor</h3>
+      <input id="auditor-input" class="uppercase" placeholder="NOMBRE DEL AUDITOR" oninput="this.value=this.value.toUpperCase()">
+    </div>
+
+    <div class="card">
+      <h3>Vehículo a auditar</h3>
+      <select id="vehiculo-select" onchange="onVehiculoChange()">
+        <option value="">-- Selecciona un vehículo --</option>
+      </select>
+      <div style="margin-top:10px;" class="row-gap">
+        <button class="btn btn-secondary btn-block" onclick="sincronizar(true)">🔄 Actualizar datos</button>
+      </div>
+    </div>
+
+    <div id="veh-detail" style="display:none;">
+
+      <div class="card">
+        <h3 id="veh-detail-title">Vehículo</h3>
+        <div class="progress-wrap">
+          <div class="progress-bar"><div class="progress-fill" id="veh-progress-fill" style="width:0%"></div></div>
+          <div class="progress-label">
+            <span id="veh-progress-text">0 / 0 auditadas</span>
+            <span id="veh-progress-pct">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="scan-box">
+        <label>Escanear ISO</label>
+        <input id="scan-input" placeholder="Esperando escaneo..." autocomplete="off">
+      </div>
+
+      <div class="card">
+        <h3>Listado de ISOs</h3>
+        <div class="iso-list" id="iso-list"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ================= TAB DASHBOARD ================= -->
+  <div id="tab-dashboard" style="display:none;">
+
+    <div class="card">
+      <div class="stat-grid">
+        <div class="stat"><div class="num" id="dash-vehiculos">0</div><div class="lbl">Vehículos</div></div>
+        <div class="stat"><div class="num" id="dash-total">0</div><div class="lbl">ISOs totales</div></div>
+        <div class="stat"><div class="num" id="dash-pct">0%</div><div class="lbl">Avance global</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Avance por vehículo</h3>
+      <div id="dash-list"></div>
+    </div>
+
+    <button class="btn btn-secondary btn-block" onclick="sincronizar(true)">🔄 Actualizar dashboard</button>
+  </div>
+
+</main>
+
+<div id="toast-container"></div>
+
+<!-- ================= MODAL CONFIGURACIÓN ================= -->
+<div class="modal-overlay" id="config-modal" style="display:none;">
+  <div class="modal">
+    <h3>Configuración</h3>
+    <div id="config-pin-step">
+      <label>PIN de configuración</label>
+      <input id="config-pin-input" type="password" inputmode="numeric" placeholder="••••">
+      <div class="row-gap" style="margin-top:14px;">
+        <button class="btn btn-secondary btn-block" onclick="closeConfig()">Cancelar</button>
+        <button class="btn btn-primary btn-block" onclick="checkPin()">Entrar</button>
+      </div>
+    </div>
+    <div id="config-form-step" style="display:none;">
+      <label>URL de Apps Script (termina en /exec)</label>
+      <input id="config-url-input" placeholder="https://script.google.com/macros/s/.../exec">
+      <div class="row-gap" style="margin-top:14px;">
+        <button class="btn btn-secondary btn-block" onclick="closeConfig()">Cancelar</button>
+        <button class="btn btn-primary btn-block" onclick="saveConfig()">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===================== ESTADO ===================== */
+const CONFIG_PIN = '2108';
+const LS_URL = 'aa_apps_script_url';
+const LS_AUDITOR = 'aa_auditor';
+const LS_MAESTRO_CACHE = 'aa_maestro_cache';
+const LS_AUDITADOS_CACHE = 'aa_auditados_cache';
+const LS_QUEUE = 'aa_pending_queue';
+
+let maestro = [];      // [{vehiculo, iso}]
+let auditados = [];    // [{vehiculo, iso, fecha, auditor}]
+let vehiculoActual = '';
+let jsonpCounter = 0;
+
+/* ===================== INIT ===================== */
+window.addEventListener('DOMContentLoaded', () => {
+  const savedAuditor = localStorage.getItem(LS_AUDITOR);
+  if (savedAuditor) document.getElementById('auditor-input').value = savedAuditor;
+  document.getElementById('auditor-input').addEventListener('input', e => {
+    localStorage.setItem(LS_AUDITOR, e.target.value);
+  });
+
+  maestro = JSON.parse(localStorage.getItem(LS_MAESTRO_CACHE) || '[]');
+  auditados = JSON.parse(localStorage.getItem(LS_AUDITADOS_CACHE) || '[]');
+  renderVehiculoSelect();
+
+  document.getElementById('scan-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      procesarScan(e.target.value);
+      e.target.value = '';
+    }
+  });
+
+  if (!getUrl()) {
+    toast('Configura la URL de Apps Script en ⚙️ Config', 'err');
+  } else {
+    sincronizar(false);
+  }
+
+  setInterval(() => sincronizar(false), 20000); // auto-sync cada 20s
+  flushQueue();
+});
+
+function getUrl(){ return localStorage.getItem(LS_URL) || ''; }
+
+/* ===================== TABS ===================== */
+function showTab(tab){
+  document.getElementById('tab-auditar').style.display = tab === 'auditar' ? '' : 'none';
+  document.getElementById('tab-dashboard').style.display = tab === 'dashboard' ? '' : 'none';
+  document.getElementById('tab-btn-auditar').classList.toggle('active', tab === 'auditar');
+  document.getElementById('tab-btn-dashboard').classList.toggle('active', tab === 'dashboard');
+  if (tab === 'dashboard') renderDashboard();
+}
+
+/* ===================== CONFIG MODAL ===================== */
+function openConfig(){
+  document.getElementById('config-modal').style.display = 'flex';
+  document.getElementById('config-pin-step').style.display = '';
+  document.getElementById('config-form-step').style.display = 'none';
+  document.getElementById('config-pin-input').value = '';
+}
+function closeConfig(){ document.getElementById('config-modal').style.display = 'none'; }
+function checkPin(){
+  if (document.getElementById('config-pin-input').value === CONFIG_PIN) {
+    document.getElementById('config-pin-step').style.display = 'none';
+    document.getElementById('config-form-step').style.display = '';
+    document.getElementById('config-url-input').value = getUrl();
+  } else {
+    toast('PIN incorrecto', 'err');
+  }
+}
+function saveConfig(){
+  const url = document.getElementById('config-url-input').value.trim();
+  if (!url) { toast('Ingresa una URL válida', 'err'); return; }
+  localStorage.setItem(LS_URL, url);
+  closeConfig();
+  toast('Configuración guardada', 'ok');
+  sincronizar(true);
+}
+
+/* ===================== JSONP (evita problemas de CORS) ===================== */
+function jsonpRequest(params){
+  return new Promise((resolve, reject) => {
+    const url = getUrl();
+    if (!url) { reject('SIN_URL'); return; }
+    const cbName = 'aa_cb_' + (jsonpCounter++) + '_' + Date.now();
+    const script = document.createElement('script');
+    const qs = new URLSearchParams(params);
+    qs.set('callback', cbName);
+    qs.set('_', Date.now()); // evita cache
+    script.src = url + '?' + qs.toString();
+    script.onerror = () => { cleanup(); reject('ERROR_RED'); };
+    const timeout = setTimeout(() => { cleanup(); reject('TIMEOUT'); }, 15000);
+    function cleanup(){
+      delete window[cbName];
+      clearTimeout(timeout);
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+    window[cbName] = (data) => { cleanup(); resolve(data); };
+    document.body.appendChild(script);
+  });
+}
+
+/* ===================== SINCRONIZACIÓN ===================== */
+async function sincronizar(manual){
+  if (!getUrl()) { if (manual) toast('Configura primero la URL en ⚙️ Config', 'err'); return; }
+  try {
+    const [rMaestro, rAuditados] = await Promise.all([
+      jsonpRequest({ action: 'maestro' }),
+      jsonpRequest({ action: 'auditados' })
+    ]);
+    if (rMaestro.ok) {
+      maestro = rMaestro.data;
+      localStorage.setItem(LS_MAESTRO_CACHE, JSON.stringify(maestro));
+    }
+    if (rAuditados.ok) {
+      auditados = rAuditados.data;
+      localStorage.setItem(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
+    }
+    renderVehiculoSelect();
+    if (vehiculoActual) renderVehiculoDetail(vehiculoActual);
+    if (document.getElementById('tab-dashboard').style.display !== 'none') renderDashboard();
+    if (manual) toast('Datos actualizados', 'ok');
+    flushQueue();
+  } catch (err) {
+    if (manual) toast('No se pudo conectar. Revisa la URL o tu conexión.', 'err');
+  }
+}
+
+/* ===================== SELECT VEHÍCULO ===================== */
+function vehiculosUnicos(){
+  const set = new Set(maestro.map(r => r.vehiculo));
+  return Array.from(set).sort();
+}
+function renderVehiculoSelect(){
+  const sel = document.getElementById('vehiculo-select');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">-- Selecciona un vehículo --</option>';
+  vehiculosUnicos().forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = v;
+    sel.appendChild(opt);
+  });
+  if (prev && vehiculosUnicos().includes(prev)) sel.value = prev;
+}
+function onVehiculoChange(){
+  const v = document.getElementById('vehiculo-select').value;
+  vehiculoActual = v;
+  if (!v) { document.getElementById('veh-detail').style.display = 'none'; return; }
+  document.getElementById('veh-detail').style.display = '';
+  renderVehiculoDetail(v);
+  document.getElementById('scan-input').focus();
+}
+
+/* ===================== DETALLE VEHÍCULO ===================== */
+function isosDeVehiculo(v){
+  return maestro.filter(r => r.vehiculo === v).map(r => r.iso);
+}
+function isosAuditadasDe(v){
+  return auditados.filter(r => r.vehiculo === v);
+}
+function queueLocal(){
+  return JSON.parse(localStorage.getItem(LS_QUEUE) || '[]');
+}
+function isoEnCola(v, iso){
+  return queueLocal().some(q => q.vehiculo === v && q.iso === iso);
+}
+
+function renderVehiculoDetail(v){
+  const isos = isosDeVehiculo(v);
+  const auditadasArr = isosAuditadasDe(v);
+  const auditadasSet = new Set(auditadasArr.map(a => a.iso));
+
+  document.getElementById('veh-detail-title').textContent = 'Vehículo ' + v;
+  const total = isos.length;
+  const hechas = isos.filter(i => auditadasSet.has(i) || isoEnCola(v,i)).length;
+  const pct = total ? Math.round((hechas/total)*100) : 0;
+  document.getElementById('veh-progress-fill').style.width = pct + '%';
+  document.getElementById('veh-progress-text').textContent = hechas + ' / ' + total + ' auditadas';
+  document.getElementById('veh-progress-pct').textContent = pct + '%';
+
+  const list = document.getElementById('iso-list');
+  list.innerHTML = '';
+  if (!isos.length){
+    list.innerHTML = '<div class="empty">Este vehículo no tiene ISOs cargadas en el Maestro.</div>';
+    return;
+  }
+  isos.forEach(iso => {
+    const reg = auditadasArr.find(a => a.iso === iso);
+    const enCola = isoEnCola(v, iso);
+    const done = !!reg || enCola;
+    const row = document.createElement('div');
+    row.className = 'iso-row' + (done ? ' done' : '');
+    let badge, meta = '';
+    if (reg) {
+      badge = '<span class="badge ok">AUDITADA</span>';
+      meta = (reg.auditor || '') + (reg.fecha ? ' · ' + new Date(reg.fecha).toLocaleString() : '');
+    } else if (enCola) {
+      badge = '<span class="badge sync">SIN SINCRONIZAR</span>';
+    } else {
+      badge = '<span class="badge pend">PENDIENTE</span>';
+    }
+    row.innerHTML =
+      '<div><div class="code">' + iso + '</div>' + (meta ? '<div class="meta">'+meta+'</div>' : '') + '</div>' +
+      badge;
+    list.appendChild(row);
+  });
+}
+
+/* ===================== ESCANEO ===================== */
+async function procesarScan(raw){
+  const iso = (raw || '').trim().toUpperCase();
+  if (!iso) return;
+  const v = vehiculoActual;
+  if (!v) { toast('Primero selecciona un vehículo', 'err'); return; }
+
+  const auditor = (document.getElementById('auditor-input').value || 'SIN NOMBRE').trim().toUpperCase();
+
+  const perteneceAlVehiculo = isosDeVehiculo(v).includes(iso);
+  if (!perteneceAlVehiculo) {
+    toast('❌ ISO ' + iso + ' no corresponde a este vehículo', 'err');
+    return;
+  }
+  const yaAuditada = isosAuditadasDe(v).some(a => a.iso === iso) || isoEnCola(v, iso);
+  if (yaAuditada) {
+    toast('⚠️ ISO ' + iso + ' ya estaba auditada', 'err');
+    renderVehiculoDetail(v);
+    return;
+  }
+
+  // Optimista: agregar a la cola local y refrescar UI de inmediato
+  const q = queueLocal();
+  q.push({ vehiculo: v, iso, auditor, fecha: new Date().toISOString() });
+  localStorage.setItem(LS_QUEUE, JSON.stringify(q));
+  renderVehiculoDetail(v);
+  toast('✅ ISO ' + iso + ' auditada', 'ok');
+
+  flushQueue();
+}
+
+async function flushQueue(){
+  if (!getUrl()) return;
+  let q = queueLocal();
+  if (!q.length) return;
+  const restante = [];
+  for (const item of q) {
+    try {
+      const r = await jsonpRequest({ action: 'registrar', vehiculo: item.vehiculo, iso: item.iso, auditor: item.auditor });
+      if (r.ok) {
+        auditados.push({ vehiculo: item.vehiculo, iso: item.iso, fecha: item.fecha, auditor: item.auditor });
+      } else if (r.error === 'YA_AUDITADA') {
+        // ya estaba, no hace falta reintentar
+      } else {
+        restante.push(item);
+      }
+    } catch (err) {
+      restante.push(item); // sin conexión: reintentar luego
+    }
+  }
+  localStorage.setItem(LS_QUEUE, JSON.stringify(restante));
+  localStorage.setItem(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
+  if (vehiculoActual) renderVehiculoDetail(vehiculoActual);
+}
+
+/* ===================== DASHBOARD ===================== */
+function renderDashboard(){
+  const vehiculos = vehiculosUnicos();
+  let totalIsos = 0, totalAuditadas = 0;
+  const filas = vehiculos.map(v => {
+    const isos = isosDeVehiculo(v);
+    const auditadasSet = new Set(isosAuditadasDe(v).map(a => a.iso));
+    const hechas = isos.filter(i => auditadasSet.has(i) || isoEnCola(v, i)).length;
+    totalIsos += isos.length;
+    totalAuditadas += hechas;
+    return { v, total: isos.length, hechas, pct: isos.length ? Math.round((hechas/isos.length)*100) : 0 };
+  }).sort((a,b) => a.pct - b.pct);
+
+  document.getElementById('dash-vehiculos').textContent = vehiculos.length;
+  document.getElementById('dash-total').textContent = totalIsos;
+  document.getElementById('dash-pct').textContent = (totalIsos ? Math.round((totalAuditadas/totalIsos)*100) : 0) + '%';
+
+  const cont = document.getElementById('dash-list');
+  cont.innerHTML = '';
+  if (!filas.length){
+    cont.innerHTML = '<div class="empty">Sin datos. Sincroniza o revisa la hoja Maestro.</div>';
+    return;
+  }
+  filas.forEach(f => {
+    const color = f.pct === 100 ? 'var(--green)' : (f.pct === 0 ? 'var(--red)' : 'var(--orange)');
+    const row = document.createElement('div');
+    row.className = 'veh-row';
+    row.innerHTML =
+      '<div class="v-name">' + f.v + '</div>' +
+      '<div class="v-bar"><div class="progress-bar"><div class="progress-fill" style="width:'+f.pct+'%;background:'+color+'"></div></div></div>' +
+      '<div class="v-pct">' + f.hechas + '/' + f.total + '</div>';
+    cont.appendChild(row);
+  });
+}
+
+/* ===================== TOAST ===================== */
+function toast(msg, type){
+  const el = document.createElement('div');
+  el.className = 'toast ' + (type || '');
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+</script>
+
+</body>
+</html>
