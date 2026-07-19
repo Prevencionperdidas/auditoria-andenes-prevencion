@@ -110,8 +110,8 @@
     color:var(--text);
     font-family:inherit;
   }
-  textarea{resize:vertical;min-height:70px;}
   select:focus,input:focus,textarea:focus{outline:none;border-color:var(--ikea-blue);}
+  textarea{resize:vertical;min-height:70px;}
   .btn{
     display:inline-flex;
     align-items:center;
@@ -127,7 +127,7 @@
   .btn-primary{background:var(--ikea-blue);color:#fff;}
   .btn-secondary{background:#fff;color:var(--ikea-blue);border:1.5px solid var(--ikea-blue);}
   .btn-yellow{background:var(--ikea-yellow);color:var(--ikea-blue-dark);}
-  .btn-warn{background:#FDEAEA;color:var(--red);border:1.5px solid #F6C7C7;}
+  .btn-red{background:#FDE8E8;color:var(--red);border:1.5px solid #F6B8B4;}
   .btn-block{width:100%;}
   .btn:disabled{opacity:.5;cursor:not-allowed;}
 
@@ -191,6 +191,7 @@
   .badge.pend{background:#FFF1D6;color:var(--orange);}
   .badge.ok{background:#D9F0DC;color:var(--green);}
   .badge.sync{background:#FDE8E8;color:var(--red);}
+  .badge.inc{background:#FDEBD9;color:var(--orange);}
 
   .toast{
     position:fixed;
@@ -230,9 +231,9 @@
     border-bottom:1px solid var(--border);
   }
   .veh-row:last-child{border-bottom:none;}
-  .veh-row .v-name{font-weight:800;font-size:14px;flex:0 0 auto;min-width:70px;}
+  .veh-row .v-name{font-weight:800;font-size:14px;}
   .veh-row .v-bar{flex:1;margin:0 12px;}
-  .veh-row .v-pct{font-weight:700;font-size:13px;width:36px;text-align:right;}
+  .veh-row .v-pct{font-weight:700;font-size:13px;width:42px;text-align:right;}
 
   .modal-overlay{
     position:fixed;inset:0;
@@ -240,6 +241,7 @@
     display:flex;align-items:center;justify-content:center;
     z-index:200;
     padding:20px;
+    overflow-y:auto;
   }
   .modal{
     background:#fff;
@@ -247,11 +249,10 @@
     padding:20px;
     max-width:380px;
     width:100%;
-    max-height:90vh;
-    overflow-y:auto;
+    margin:auto;
   }
   .modal h3{margin-top:0;}
-  .modal p.hint{font-size:13px;color:var(--muted);margin-top:-6px;}
+  .modal .field{margin-bottom:14px;}
   .center{text-align:center;}
   .empty{
     text-align:center;
@@ -278,15 +279,30 @@
   }
   .anden-pill{
     display:inline-block;
-    background:var(--ikea-yellow);
-    color:var(--ikea-blue-dark);
-    font-weight:800;
+    background:var(--ikea-blue-dark);
+    color:#fff;
+    font-weight:700;
     font-size:12px;
     padding:4px 10px;
     border-radius:20px;
     margin-left:8px;
   }
-  .field{margin-bottom:14px;}
+  .inc-row{
+    padding:10px 12px;
+    border-radius:8px;
+    border:1.5px solid #F6D9B8;
+    background:#FFF8EE;
+    margin-bottom:8px;
+  }
+  .inc-row .inc-top{display:flex;justify-content:space-between;align-items:center;}
+  .inc-row .inc-tipo{font-weight:800;font-size:13px;color:var(--orange);}
+  .inc-row .inc-meta{font-size:11px;color:var(--muted);margin-top:4px;}
+  .bar-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);}
+  .bar-row:last-child{border-bottom:none;}
+  .bar-row .bar-label{width:88px;font-size:12px;font-weight:700;flex-shrink:0;}
+  .bar-row .bar-track{flex:1;height:14px;background:var(--border);border-radius:6px;overflow:hidden;}
+  .bar-row .bar-fill{height:100%;border-radius:6px;}
+  .bar-row .bar-val{width:32px;text-align:right;font-size:12px;font-weight:700;flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -339,12 +355,18 @@
             <span id="veh-progress-pct">0%</span>
           </div>
         </div>
-        <button class="btn btn-warn btn-block" style="margin-top:12px;" onclick="abrirModalIncidencia()">⚠️ Reportar incidencia / producto sobrante</button>
       </div>
 
       <div class="scan-box">
         <label>Escanear ISO</label>
         <input id="scan-input" placeholder="Esperando escaneo..." autocomplete="off">
+      </div>
+
+      <button class="btn btn-yellow btn-block" style="margin-bottom:14px;" onclick="abrirIncidencia()">⚠️ Reportar incidencia (ej. producto sobrante)</button>
+
+      <div class="card" id="inc-card">
+        <h3>Incidencias reportadas en este vehículo</h3>
+        <div id="inc-list"></div>
       </div>
 
       <div class="card">
@@ -373,18 +395,18 @@
     </div>
 
     <div class="card">
-      <h3>Vehículos auditados por andén</h3>
-      <div id="dash-andenes-list"></div>
-    </div>
-
-    <div class="card">
-      <h3>ISOs sobrantes por andén</h3>
-      <div id="dash-sobrantes-list"></div>
-    </div>
-
-    <div class="card">
       <h3>Incidencias por tipo</h3>
-      <div id="dash-tipos-list"></div>
+      <div id="dash-inc-tipo"></div>
+    </div>
+
+    <div class="card">
+      <h3>Productos sobrantes por andén</h3>
+      <div id="dash-sobrantes-anden"></div>
+    </div>
+
+    <div class="card">
+      <h3>ISOs auditadas por andén</h3>
+      <div id="dash-auditadas-anden"></div>
     </div>
 
     <button class="btn btn-secondary btn-block" onclick="sincronizar(true)">🔄 Actualizar dashboard</button>
@@ -417,15 +439,19 @@
   </div>
 </div>
 
-<!-- ================= MODAL ANDÉN (única vez por vehículo/fecha) ================= -->
+<!-- ================= MODAL ANDÉN (una sola vez por auditoría) ================= -->
 <div class="modal-overlay" id="anden-modal" style="display:none;">
   <div class="modal">
-    <h3>¿En qué andén estás auditando?</h3>
-    <p class="hint">Se pregunta una sola vez al iniciar la auditoría de este vehículo.</p>
+    <h3>Andén de auditoría</h3>
+    <p style="font-size:13px;color:var(--muted);margin-top:-6px;">Indica en qué andén se está auditando este vehículo. Solo se pregunta una vez por auditoría.</p>
     <div class="field">
-      <input id="anden-input" class="uppercase" placeholder="EJ: A12" oninput="this.value=this.value.toUpperCase()">
+      <label>Andén</label>
+      <input id="anden-input" class="uppercase" placeholder="EJ. AND-05" oninput="this.value=this.value.toUpperCase()">
     </div>
-    <button class="btn btn-primary btn-block" onclick="confirmarAnden()">Confirmar</button>
+    <div class="row-gap">
+      <button class="btn btn-secondary btn-block" onclick="cancelarAnden()">Cancelar</button>
+      <button class="btn btn-primary btn-block" onclick="confirmarAnden()">Comenzar auditoría</button>
+    </div>
   </div>
 </div>
 
@@ -435,24 +461,28 @@
     <h3>Reportar incidencia</h3>
     <div class="field">
       <label>Tipo de incidencia</label>
-      <select id="incidencia-tipo">
-        <option value="SOBRANTE">Producto sobrante</option>
-        <option value="DAÑADO">Producto dañado</option>
-        <option value="FALTANTE">Producto faltante</option>
+      <select id="inc-tipo">
+        <option value="PRODUCTO SOBRANTE">Producto sobrante</option>
+        <option value="PRODUCTO DAÑADO">Producto dañado</option>
+        <option value="PRODUCTO FALTANTE">Producto faltante</option>
         <option value="OTRO">Otro</option>
       </select>
     </div>
     <div class="field">
       <label>Código / ISO (opcional)</label>
-      <input id="incidencia-codigo" class="uppercase" placeholder="EJ: ISO1670680">
+      <input id="inc-codigo" class="uppercase" placeholder="EJ. ISO1670680" oninput="this.value=this.value.toUpperCase()">
+    </div>
+    <div class="field">
+      <label>Cantidad</label>
+      <input id="inc-cantidad" type="number" inputmode="numeric" min="1" value="1">
     </div>
     <div class="field">
       <label>Descripción</label>
-      <textarea id="incidencia-desc" placeholder="Describe lo encontrado..."></textarea>
+      <textarea id="inc-descripcion" placeholder="Detalle lo encontrado..."></textarea>
     </div>
     <div class="row-gap">
-      <button class="btn btn-secondary btn-block" onclick="cerrarModalIncidencia()">Cancelar</button>
-      <button class="btn btn-primary btn-block" onclick="registrarIncidenciaUI()">Registrar</button>
+      <button class="btn btn-secondary btn-block" onclick="cerrarIncidencia()">Cancelar</button>
+      <button class="btn btn-primary btn-block" onclick="guardarIncidencia()">Guardar</button>
     </div>
   </div>
 </div>
@@ -464,17 +494,14 @@ const LS_URL = 'aa_apps_script_url';
 const LS_AUDITOR = 'aa_auditor';
 const LS_MAESTRO_CACHE = 'aa_maestro_cache';
 const LS_AUDITADOS_CACHE = 'aa_auditados_cache';
-const LS_ANDENES_CACHE = 'aa_andenes_cache';
 const LS_INCIDENCIAS_CACHE = 'aa_incidencias_cache';
 const LS_QUEUE = 'aa_pending_queue';
-const LS_QUEUE_INC = 'aa_pending_queue_incidencias';
 const LS_FECHA = 'aa_fecha_seleccionada';
-const LS_ANDEN_LOCAL = 'aa_anden_local';
+const LS_ANDENES = 'aa_andenes_map';
 
 let maestro = [];       // [{vehiculo, iso, horaEstimada, fecha}]
-let auditados = [];     // [{vehiculo, iso, fecha, fechaHora, auditor}]
-let andenes = [];       // [{fecha, vehiculo, anden, auditor, fechaHora}]
-let incidencias = [];   // [{fecha, anden, vehiculo, tipo, codigo, descripcion, auditor, fechaHora}]
+let auditados = [];     // [{vehiculo, iso, fecha, anden, fechaHora, auditor}]
+let incidencias = [];   // [{fecha, anden, vehiculo, tipo, codigo, cantidad, descripcion, auditor, fechaHora}]
 let vehiculoActual = '';
 let fechaActual = '';
 let andenActual = '';
@@ -491,7 +518,6 @@ window.addEventListener('DOMContentLoaded', () => {
   fechaActual = localStorage.getItem(LS_FECHA) || '';
   maestro = JSON.parse(localStorage.getItem(LS_MAESTRO_CACHE) || '[]');
   auditados = JSON.parse(localStorage.getItem(LS_AUDITADOS_CACHE) || '[]');
-  andenes = JSON.parse(localStorage.getItem(LS_ANDENES_CACHE) || '[]');
   incidencias = JSON.parse(localStorage.getItem(LS_INCIDENCIAS_CACHE) || '[]');
   renderFechaSelect();
   renderVehiculoSelect();
@@ -510,13 +536,11 @@ window.addEventListener('DOMContentLoaded', () => {
     sincronizar(false);
   }
 
-  setInterval(() => sincronizar(false), 20000);
+  setInterval(() => sincronizar(false), 20000); // auto-sync cada 20s
   flushQueue();
-  flushQueueIncidencias();
 });
 
 function getUrl(){ return localStorage.getItem(LS_URL) || ''; }
-function getAuditor(){ return (document.getElementById('auditor-input').value || 'SIN NOMBRE').trim().toUpperCase(); }
 
 /* ===================== TABS ===================== */
 function showTab(tab){
@@ -580,24 +604,29 @@ function jsonpRequest(params){
 async function sincronizar(manual){
   if (!getUrl()) { if (manual) toast('Configura primero la URL en ⚙️ Config', 'err'); return; }
   try {
-    const [rMaestro, rAuditados, rAndenes, rIncidencias] = await Promise.all([
+    const [rMaestro, rAuditados, rIncidencias] = await Promise.all([
       jsonpRequest({ action: 'maestro' }),
       jsonpRequest({ action: 'auditados' }),
-      jsonpRequest({ action: 'andenes' }),
       jsonpRequest({ action: 'incidencias' })
     ]);
-    if (rMaestro.ok) { maestro = rMaestro.data; localStorage.setItem(LS_MAESTRO_CACHE, JSON.stringify(maestro)); }
-    if (rAuditados.ok) { auditados = rAuditados.data; localStorage.setItem(LS_AUDITADOS_CACHE, JSON.stringify(auditados)); }
-    if (rAndenes.ok) { andenes = rAndenes.data; localStorage.setItem(LS_ANDENES_CACHE, JSON.stringify(andenes)); }
-    if (rIncidencias.ok) { incidencias = rIncidencias.data; localStorage.setItem(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias)); }
-
+    if (rMaestro.ok) {
+      maestro = rMaestro.data;
+      localStorage.setItem(LS_MAESTRO_CACHE, JSON.stringify(maestro));
+    }
+    if (rAuditados.ok) {
+      auditados = rAuditados.data;
+      localStorage.setItem(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
+    }
+    if (rIncidencias.ok) {
+      incidencias = rIncidencias.data;
+      localStorage.setItem(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias));
+    }
     renderFechaSelect();
     renderVehiculoSelect();
-    if (vehiculoActual) renderVehiculoDetail(vehiculoActual);
+    if (vehiculoActual) { renderVehiculoDetail(vehiculoActual); renderIncidenciasDeVehiculo(); }
     if (document.getElementById('tab-dashboard').style.display !== 'none') renderDashboard();
     if (manual) toast('Datos actualizados', 'ok');
     flushQueue();
-    flushQueueIncidencias();
   } catch (err) {
     if (manual) toast('No se pudo conectar. Revisa la URL o tu conexión.', 'err');
   }
@@ -638,8 +667,7 @@ function onFechaChange(){
   fechaActual = document.getElementById('fecha-select').value;
   localStorage.setItem(LS_FECHA, fechaActual);
   document.getElementById('dash-fecha-pill').textContent = fechaActual ? formatearFechaLarga(fechaActual) : 'Sin fecha seleccionada';
-  vehiculoActual = '';
-  andenActual = '';
+  vehiculoActual = ''; andenActual = '';
   document.getElementById('vehiculo-select').value = '';
   document.getElementById('veh-detail').style.display = 'none';
   renderVehiculoSelect();
@@ -663,62 +691,59 @@ function renderVehiculoSelect(){
   });
   if (prev && disponibles.includes(prev)) sel.value = prev;
 }
+
 function onVehiculoChange(){
   const v = document.getElementById('vehiculo-select').value;
   vehiculoActual = v;
-  andenActual = '';
   if (!v) { document.getElementById('veh-detail').style.display = 'none'; return; }
 
-  const anden = buscarAnden(fechaActual, v);
-  if (anden) {
-    andenActual = anden;
+  const andenGuardado = obtenerAndenSesion(fechaActual, v);
+  if (andenGuardado) {
+    andenActual = andenGuardado;
     mostrarDetalleVehiculo();
   } else {
     abrirModalAnden();
   }
 }
-function mostrarDetalleVehiculo(){
-  document.getElementById('veh-detail').style.display = '';
-  renderVehiculoDetail(vehiculoActual);
-  document.getElementById('scan-input').focus();
-}
 
-/* ===================== ANDÉN (única vez por fecha + vehículo) ===================== */
-function buscarAnden(fecha, v){
-  const enServidor = andenes.find(a => a.fecha === fecha && a.vehiculo === v);
-  if (enServidor) return enServidor.anden;
-  const local = JSON.parse(localStorage.getItem(LS_ANDEN_LOCAL) || '{}');
-  return local[fecha + '|' + v] || '';
+/* ===================== ANDÉN (una vez por auditoría) ===================== */
+function obtenerAndenSesion(fecha, vehiculo){
+  const map = JSON.parse(localStorage.getItem(LS_ANDENES) || '{}');
+  const key = fecha + '|' + vehiculo;
+  if (map[key]) return map[key];
+  const enAuditados = auditados.find(a => a.fecha === fecha && a.vehiculo === vehiculo && a.anden);
+  if (enAuditados) { map[key] = enAuditados.anden; localStorage.setItem(LS_ANDENES, JSON.stringify(map)); return enAuditados.anden; }
+  const enIncidencias = incidencias.find(i => i.fecha === fecha && i.vehiculo === vehiculo && i.anden);
+  if (enIncidencias) { map[key] = enIncidencias.anden; localStorage.setItem(LS_ANDENES, JSON.stringify(map)); return enIncidencias.anden; }
+  return '';
+}
+function guardarAndenSesion(fecha, vehiculo, anden){
+  const map = JSON.parse(localStorage.getItem(LS_ANDENES) || '{}');
+  map[fecha + '|' + vehiculo] = anden;
+  localStorage.setItem(LS_ANDENES, JSON.stringify(map));
 }
 function abrirModalAnden(){
   document.getElementById('anden-input').value = '';
   document.getElementById('anden-modal').style.display = 'flex';
-  setTimeout(() => document.getElementById('anden-input').focus(), 100);
 }
-async function confirmarAnden(){
-  const val = document.getElementById('anden-input').value.trim().toUpperCase();
-  if (!val) { toast('Ingresa el andén', 'err'); return; }
-  const fecha = fechaActual, v = vehiculoActual, auditor = getAuditor();
-
-  const local = JSON.parse(localStorage.getItem(LS_ANDEN_LOCAL) || '{}');
-  local[fecha + '|' + v] = val;
-  localStorage.setItem(LS_ANDEN_LOCAL, JSON.stringify(local));
-  andenActual = val;
-
+function confirmarAnden(){
+  const anden = document.getElementById('anden-input').value.trim().toUpperCase();
+  if (!anden) { toast('Ingresa el andén', 'err'); return; }
+  andenActual = anden;
+  guardarAndenSesion(fechaActual, vehiculoActual, anden);
   document.getElementById('anden-modal').style.display = 'none';
   mostrarDetalleVehiculo();
-
-  try {
-    const r = await jsonpRequest({ action: 'registrarAnden', fecha, vehiculo: v, anden: val, auditor });
-    if (r.ok) {
-      andenActual = r.anden;
-      andenes.push({ fecha, vehiculo: v, anden: r.anden, auditor, fechaHora: new Date().toISOString() });
-      localStorage.setItem(LS_ANDENES_CACHE, JSON.stringify(andenes));
-      if (vehiculoActual === v) renderVehiculoDetail(v);
-    }
-  } catch (err) {
-    // sin conexión: queda guardado localmente y se confirmará en el próximo sync
-  }
+}
+function cancelarAnden(){
+  document.getElementById('anden-modal').style.display = 'none';
+  document.getElementById('vehiculo-select').value = '';
+  vehiculoActual = '';
+}
+function mostrarDetalleVehiculo(){
+  document.getElementById('veh-detail').style.display = '';
+  renderVehiculoDetail(vehiculoActual);
+  renderIncidenciasDeVehiculo();
+  document.getElementById('scan-input').focus();
 }
 
 /* ===================== DETALLE VEHÍCULO ===================== */
@@ -739,7 +764,7 @@ function queueLocal(){
   return JSON.parse(localStorage.getItem(LS_QUEUE) || '[]');
 }
 function isoEnCola(v, iso){
-  return queueLocal().some(q => q.vehiculo === v && q.iso === iso && q.fecha === fechaActual);
+  return queueLocal().some(q => q.kind === 'auditoria' && q.vehiculo === v && q.iso === iso && q.fecha === fechaActual);
 }
 
 function renderVehiculoDetail(v){
@@ -747,8 +772,7 @@ function renderVehiculoDetail(v){
   const auditadasArr = isosAuditadasDe(v);
   const auditadasSet = new Set(auditadasArr.map(a => a.iso));
 
-  document.getElementById('veh-detail-title').innerHTML =
-    'Vehículo ' + v + (andenActual ? '<span class="anden-pill">ANDÉN ' + andenActual + '</span>' : '');
+  document.getElementById('veh-detail-title').innerHTML = 'Vehículo ' + v + '<span class="anden-pill">Andén ' + (andenActual || '?') + '</span>';
   const total = isos.length;
   const hechas = isos.filter(i => auditadasSet.has(i) || isoEnCola(v,i)).length;
   const pct = total ? Math.round((hechas/total)*100) : 0;
@@ -794,7 +818,7 @@ async function procesarScan(raw){
   if (!v) { toast('Primero selecciona un vehículo', 'err'); return; }
   if (!fechaActual) { toast('Primero selecciona la fecha a auditar', 'err'); return; }
 
-  const auditor = getAuditor();
+  const auditor = (document.getElementById('auditor-input').value || 'SIN NOMBRE').trim().toUpperCase();
 
   const perteneceAlVehiculo = isosDeVehiculo(v).includes(iso);
   if (!perteneceAlVehiculo) {
@@ -809,7 +833,7 @@ async function procesarScan(raw){
   }
 
   const q = queueLocal();
-  q.push({ vehiculo: v, iso, auditor, fecha: fechaActual, fechaHora: new Date().toISOString() });
+  q.push({ kind:'auditoria', vehiculo: v, iso, auditor, fecha: fechaActual, anden: andenActual, fechaHora: new Date().toISOString() });
   localStorage.setItem(LS_QUEUE, JSON.stringify(q));
   renderVehiculoDetail(v);
   toast('✅ ISO ' + iso + ' auditada', 'ok');
@@ -817,6 +841,70 @@ async function procesarScan(raw){
   flushQueue();
 }
 
+/* ===================== INCIDENCIAS ===================== */
+function abrirIncidencia(){
+  if (!vehiculoActual || !fechaActual) { toast('Selecciona vehículo y fecha primero', 'err'); return; }
+  document.getElementById('inc-tipo').value = 'PRODUCTO SOBRANTE';
+  document.getElementById('inc-codigo').value = '';
+  document.getElementById('inc-cantidad').value = 1;
+  document.getElementById('inc-descripcion').value = '';
+  document.getElementById('incidencia-modal').style.display = 'flex';
+}
+function cerrarIncidencia(){
+  document.getElementById('incidencia-modal').style.display = 'none';
+}
+function guardarIncidencia(){
+  const tipo = document.getElementById('inc-tipo').value;
+  const codigo = document.getElementById('inc-codigo').value.trim().toUpperCase();
+  const cantidad = Number(document.getElementById('inc-cantidad').value) || 1;
+  const descripcion = document.getElementById('inc-descripcion').value.trim();
+  const auditor = (document.getElementById('auditor-input').value || 'SIN NOMBRE').trim().toUpperCase();
+
+  const item = {
+    kind: 'incidencia',
+    fecha: fechaActual,
+    anden: andenActual,
+    vehiculo: vehiculoActual,
+    tipo, codigo, cantidad, descripcion, auditor,
+    fechaHora: new Date().toISOString()
+  };
+  const q = queueLocal();
+  q.push(item);
+  localStorage.setItem(LS_QUEUE, JSON.stringify(q));
+  incidencias.push(item);
+  localStorage.setItem(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias));
+
+  cerrarIncidencia();
+  renderIncidenciasDeVehiculo();
+  toast('⚠️ Incidencia registrada', 'ok');
+  flushQueue();
+}
+function incidenciasDeVehiculoActual(){
+  return incidencias
+    .filter(i => i.vehiculo === vehiculoActual && i.fecha === fechaActual)
+    .sort((a,b) => (b.fechaHora||'').localeCompare(a.fechaHora||''));
+}
+function renderIncidenciasDeVehiculo(){
+  const cont = document.getElementById('inc-list');
+  const lista = incidenciasDeVehiculoActual();
+  if (!lista.length){ cont.innerHTML = '<div class="empty">Sin incidencias reportadas para este vehículo.</div>'; return; }
+  cont.innerHTML = '';
+  lista.forEach(i => {
+    const row = document.createElement('div');
+    row.className = 'inc-row';
+    const sinSincronizar = queueLocal().some(q => q.kind==='incidencia' && q.fechaHora === i.fechaHora && q.vehiculo === i.vehiculo);
+    row.innerHTML =
+      '<div class="inc-top"><span class="inc-tipo">' + i.tipo + '</span>' +
+      (sinSincronizar ? '<span class="badge sync">SIN SINCRONIZAR</span>' : '<span class="badge inc">CANT. ' + i.cantidad + '</span>') +
+      '</div>' +
+      (i.codigo ? '<div class="inc-meta">Código: ' + i.codigo + '</div>' : '') +
+      (i.descripcion ? '<div class="inc-meta">' + i.descripcion + '</div>' : '') +
+      '<div class="inc-meta">' + (i.auditor||'') + (i.fechaHora ? ' · ' + new Date(i.fechaHora).toLocaleString() : '') + '</div>';
+    cont.appendChild(row);
+  });
+}
+
+/* ===================== SINCRONIZACIÓN DE COLA (auditorías + incidencias) ===================== */
 async function flushQueue(){
   if (!getUrl()) return;
   let q = queueLocal();
@@ -824,93 +912,48 @@ async function flushQueue(){
   const restante = [];
   for (const item of q) {
     try {
-      const r = await jsonpRequest({ action: 'registrar', vehiculo: item.vehiculo, iso: item.iso, auditor: item.auditor, fecha: item.fecha });
-      if (r.ok) {
-        auditados.push({ vehiculo: item.vehiculo, iso: item.iso, fecha: item.fecha, fechaHora: item.fechaHora, auditor: item.auditor });
-      } else if (r.error === 'YA_AUDITADA') {
-        // ya estaba
+      if (item.kind === 'incidencia') {
+        const r = await jsonpRequest({
+          action: 'registrarIncidencia',
+          fecha: item.fecha, anden: item.anden, vehiculo: item.vehiculo,
+          tipo: item.tipo, codigo: item.codigo, cantidad: item.cantidad,
+          descripcion: item.descripcion, auditor: item.auditor
+        });
+        if (!r.ok) restante.push(item);
       } else {
-        restante.push(item);
+        const r = await jsonpRequest({ action: 'registrar', vehiculo: item.vehiculo, iso: item.iso, auditor: item.auditor, fecha: item.fecha, anden: item.anden });
+        if (r.ok) {
+          auditados.push({ vehiculo: item.vehiculo, iso: item.iso, fecha: item.fecha, anden: item.anden, fechaHora: item.fechaHora, auditor: item.auditor });
+        } else if (r.error === 'YA_AUDITADA') {
+          // ya estaba, no hace falta reintentar
+        } else {
+          restante.push(item);
+        }
       }
     } catch (err) {
-      restante.push(item);
+      restante.push(item); // sin conexión: reintentar luego
     }
   }
   localStorage.setItem(LS_QUEUE, JSON.stringify(restante));
   localStorage.setItem(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
-  if (vehiculoActual) renderVehiculoDetail(vehiculoActual);
-}
-
-/* ===================== INCIDENCIAS ===================== */
-function abrirModalIncidencia(){
-  if (!vehiculoActual || !fechaActual) { toast('Selecciona fecha y vehículo primero', 'err'); return; }
-  document.getElementById('incidencia-tipo').value = 'SOBRANTE';
-  document.getElementById('incidencia-codigo').value = '';
-  document.getElementById('incidencia-desc').value = '';
-  document.getElementById('incidencia-modal').style.display = 'flex';
-}
-function cerrarModalIncidencia(){
-  document.getElementById('incidencia-modal').style.display = 'none';
-}
-function registrarIncidenciaUI(){
-  const tipo = document.getElementById('incidencia-tipo').value;
-  const codigo = document.getElementById('incidencia-codigo').value.trim().toUpperCase();
-  const descripcion = document.getElementById('incidencia-desc').value.trim();
-  const auditor = getAuditor();
-
-  const item = { fecha: fechaActual, anden: andenActual, vehiculo: vehiculoActual, tipo, codigo, descripcion, auditor, fechaHora: new Date().toISOString() };
-
-  const q = JSON.parse(localStorage.getItem(LS_QUEUE_INC) || '[]');
-  q.push(item);
-  localStorage.setItem(LS_QUEUE_INC, JSON.stringify(q));
-  incidencias.push(item);
-  localStorage.setItem(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias));
-
-  cerrarModalIncidencia();
-  toast('⚠️ Incidencia registrada', 'ok');
-  flushQueueIncidencias();
-}
-async function flushQueueIncidencias(){
-  if (!getUrl()) return;
-  let q = JSON.parse(localStorage.getItem(LS_QUEUE_INC) || '[]');
-  if (!q.length) return;
-  const restante = [];
-  for (const item of q) {
-    try {
-      const r = await jsonpRequest({
-        action: 'registrarIncidencia', fecha: item.fecha, anden: item.anden, vehiculo: item.vehiculo,
-        tipo: item.tipo, codigo: item.codigo, descripcion: item.descripcion, auditor: item.auditor
-      });
-      if (!r.ok) restante.push(item);
-    } catch (err) {
-      restante.push(item);
-    }
-  }
-  localStorage.setItem(LS_QUEUE_INC, JSON.stringify(restante));
+  if (vehiculoActual) { renderVehiculoDetail(vehiculoActual); renderIncidenciasDeVehiculo(); }
 }
 
 /* ===================== DASHBOARD ===================== */
-function contarPor(arr, keyFn){
-  const map = {};
-  arr.forEach(item => {
-    const k = keyFn(item) || 'SIN DATO';
-    map[k] = (map[k] || 0) + 1;
-  });
-  return Object.entries(map).sort((a,b) => b[1]-a[1]);
-}
-function renderBarList(containerId, pares, color){
-  const cont = document.getElementById(containerId);
+function renderBarras(contId, dataObj, colorVar){
+  const cont = document.getElementById(contId);
+  const entradas = Object.keys(dataObj).map(k => [k, dataObj[k]]).sort((a,b) => b[1]-a[1]);
+  if (!entradas.length){ cont.innerHTML = '<div class="empty">Sin datos para esta fecha.</div>'; return; }
+  const max = Math.max.apply(null, entradas.map(e => e[1]));
   cont.innerHTML = '';
-  if (!pares.length){ cont.innerHTML = '<div class="empty">Sin datos para esta fecha.</div>'; return; }
-  const max = Math.max(...pares.map(p => p[1]));
-  pares.forEach(([label, count]) => {
-    const pct = max ? Math.round((count/max)*100) : 0;
+  entradas.forEach(([label, val]) => {
+    const pct = max ? Math.round((val/max)*100) : 0;
     const row = document.createElement('div');
-    row.className = 'veh-row';
+    row.className = 'bar-row';
     row.innerHTML =
-      '<div class="v-name">' + label + '</div>' +
-      '<div class="v-bar"><div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%;background:'+color+'"></div></div></div>' +
-      '<div class="v-pct">' + count + '</div>';
+      '<div class="bar-label" title="'+label+'">' + label + '</div>' +
+      '<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+colorVar+'"></div></div>' +
+      '<div class="bar-val">' + val + '</div>';
     cont.appendChild(row);
   });
 }
@@ -949,13 +992,28 @@ function renderDashboard(){
     });
   }
 
-  const andenesDelDia = andenes.filter(a => a.fecha === fechaActual);
-  renderBarList('dash-andenes-list', contarPor(andenesDelDia, a => a.anden), 'var(--ikea-blue)');
+  // ---- Incidencias por tipo (del día seleccionado) ----
+  const incDia = incidencias.filter(i => i.fecha === fechaActual);
+  const porTipo = {};
+  incDia.forEach(i => { porTipo[i.tipo] = (porTipo[i.tipo]||0) + (Number(i.cantidad)||1); });
+  renderBarras('dash-inc-tipo', porTipo, 'var(--orange)');
 
-  const incidenciasDelDia = incidencias.filter(i => i.fecha === fechaActual);
-  const sobrantesDelDia = incidenciasDelDia.filter(i => i.tipo === 'SOBRANTE');
-  renderBarList('dash-sobrantes-list', contarPor(sobrantesDelDia, i => i.anden), 'var(--orange)');
-  renderBarList('dash-tipos-list', contarPor(incidenciasDelDia, i => i.tipo), 'var(--red)');
+  // ---- Productos sobrantes por andén (del día seleccionado) ----
+  const sobrantesPorAnden = {};
+  incDia.filter(i => i.tipo === 'PRODUCTO SOBRANTE').forEach(i => {
+    const key = i.anden || 'SIN ANDÉN';
+    sobrantesPorAnden[key] = (sobrantesPorAnden[key]||0) + (Number(i.cantidad)||1);
+  });
+  renderBarras('dash-sobrantes-anden', sobrantesPorAnden, 'var(--orange)');
+
+  // ---- ISOs auditadas por andén (del día seleccionado) ----
+  const auditadosDia = auditados.filter(a => a.fecha === fechaActual);
+  const auditadasPorAnden = {};
+  auditadosDia.forEach(a => {
+    const key = a.anden || 'SIN ANDÉN';
+    auditadasPorAnden[key] = (auditadasPorAnden[key]||0) + 1;
+  });
+  renderBarras('dash-auditadas-anden', auditadasPorAnden, 'var(--green)');
 }
 
 /* ===================== TOAST ===================== */
