@@ -522,7 +522,14 @@ function onVehiculoChange(){
 
 /* ===================== DETALLE VEHÍCULO ===================== */
 function isosDeVehiculo(v){
-  return maestro.filter(r => r.vehiculo === v).map(r => r.iso);
+  return maestro
+    .filter(r => r.vehiculo === v)
+    .sort((a,b) => (a.horaEstimada||'').localeCompare(b.horaEstimada||''))
+    .map(r => r.iso);
+}
+function horaEstimadaDe(v, iso){
+  const r = maestro.find(m => m.vehiculo === v && m.iso === iso);
+  return r && r.horaEstimada ? new Date(r.horaEstimada).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}) : '';
 }
 function isosAuditadasDe(v){
   return auditados.filter(r => r.vehiculo === v);
@@ -567,6 +574,8 @@ function renderVehiculoDetail(v){
       badge = '<span class="badge sync">SIN SINCRONIZAR</span>';
     } else {
       badge = '<span class="badge pend">PENDIENTE</span>';
+      const hora = horaEstimadaDe(v, iso);
+      if (hora) meta = 'Llegada estimada: ' + hora;
     }
     row.innerHTML =
       '<div><div class="code">' + iso + '</div>' + (meta ? '<div class="meta">'+meta+'</div>' : '') + '</div>' +
