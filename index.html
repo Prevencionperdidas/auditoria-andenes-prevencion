@@ -100,7 +100,7 @@
   }
   .card h3{margin:0 0 12px;font-size:14px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
   label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px;}
-  select,input{
+  select,input,textarea{
     width:100%;
     padding:12px;
     border:1.5px solid var(--border);
@@ -108,8 +108,10 @@
     font-size:15px;
     background:#fff;
     color:var(--text);
+    font-family:inherit;
   }
-  select:focus,input:focus{outline:none;border-color:var(--ikea-blue);}
+  textarea{resize:vertical;min-height:70px;}
+  select:focus,input:focus,textarea:focus{outline:none;border-color:var(--ikea-blue);}
   .btn{
     display:inline-flex;
     align-items:center;
@@ -125,6 +127,7 @@
   .btn-primary{background:var(--ikea-blue);color:#fff;}
   .btn-secondary{background:#fff;color:var(--ikea-blue);border:1.5px solid var(--ikea-blue);}
   .btn-yellow{background:var(--ikea-yellow);color:var(--ikea-blue-dark);}
+  .btn-warn{background:#FDEAEA;color:var(--red);border:1.5px solid #F6C7C7;}
   .btn-block{width:100%;}
   .btn:disabled{opacity:.5;cursor:not-allowed;}
 
@@ -183,6 +186,7 @@
     font-weight:700;
     padding:4px 10px;
     border-radius:20px;
+    white-space:nowrap;
   }
   .badge.pend{background:#FFF1D6;color:var(--orange);}
   .badge.ok{background:#D9F0DC;color:var(--green);}
@@ -226,9 +230,9 @@
     border-bottom:1px solid var(--border);
   }
   .veh-row:last-child{border-bottom:none;}
-  .veh-row .v-name{font-weight:800;font-size:14px;}
+  .veh-row .v-name{font-weight:800;font-size:14px;flex:0 0 auto;min-width:70px;}
   .veh-row .v-bar{flex:1;margin:0 12px;}
-  .veh-row .v-pct{font-weight:700;font-size:13px;width:42px;text-align:right;}
+  .veh-row .v-pct{font-weight:700;font-size:13px;width:36px;text-align:right;}
 
   .modal-overlay{
     position:fixed;inset:0;
@@ -241,10 +245,13 @@
     background:#fff;
     border-radius:var(--radius);
     padding:20px;
-    max-width:360px;
+    max-width:380px;
     width:100%;
+    max-height:90vh;
+    overflow-y:auto;
   }
   .modal h3{margin-top:0;}
+  .modal p.hint{font-size:13px;color:var(--muted);margin-top:-6px;}
   .center{text-align:center;}
   .empty{
     text-align:center;
@@ -259,6 +266,27 @@
     font-size:13px;font-weight:700;cursor:pointer;padding:0;
   }
   .uppercase{text-transform:uppercase;}
+  .fecha-pill{
+    display:inline-block;
+    background:#EAF1FA;
+    color:var(--ikea-blue);
+    font-weight:700;
+    font-size:12px;
+    padding:4px 10px;
+    border-radius:20px;
+    margin-bottom:10px;
+  }
+  .anden-pill{
+    display:inline-block;
+    background:var(--ikea-yellow);
+    color:var(--ikea-blue-dark);
+    font-weight:800;
+    font-size:12px;
+    padding:4px 10px;
+    border-radius:20px;
+    margin-left:8px;
+  }
+  .field{margin-bottom:14px;}
 </style>
 </head>
 <body>
@@ -284,7 +312,14 @@
     </div>
 
     <div class="card">
-      <h3>Vehículo a auditar</h3>
+      <h3>Fecha a auditar</h3>
+      <select id="fecha-select" onchange="onFechaChange()">
+        <option value="">-- Selecciona una fecha --</option>
+      </select>
+    </div>
+
+    <div class="card">
+      <h3>Vehículo</h3>
       <select id="vehiculo-select" onchange="onVehiculoChange()">
         <option value="">-- Selecciona un vehículo --</option>
       </select>
@@ -304,6 +339,7 @@
             <span id="veh-progress-pct">0%</span>
           </div>
         </div>
+        <button class="btn btn-warn btn-block" style="margin-top:12px;" onclick="abrirModalIncidencia()">⚠️ Reportar incidencia / producto sobrante</button>
       </div>
 
       <div class="scan-box">
@@ -323,16 +359,32 @@
   <div id="tab-dashboard" style="display:none;">
 
     <div class="card">
+      <span class="fecha-pill" id="dash-fecha-pill">Sin fecha seleccionada</span>
       <div class="stat-grid">
         <div class="stat"><div class="num" id="dash-vehiculos">0</div><div class="lbl">Vehículos</div></div>
         <div class="stat"><div class="num" id="dash-total">0</div><div class="lbl">ISOs totales</div></div>
-        <div class="stat"><div class="num" id="dash-pct">0%</div><div class="lbl">Avance global</div></div>
+        <div class="stat"><div class="num" id="dash-pct">0%</div><div class="lbl">Avance del día</div></div>
       </div>
     </div>
 
     <div class="card">
       <h3>Avance por vehículo</h3>
       <div id="dash-list"></div>
+    </div>
+
+    <div class="card">
+      <h3>Vehículos auditados por andén</h3>
+      <div id="dash-andenes-list"></div>
+    </div>
+
+    <div class="card">
+      <h3>ISOs sobrantes por andén</h3>
+      <div id="dash-sobrantes-list"></div>
+    </div>
+
+    <div class="card">
+      <h3>Incidencias por tipo</h3>
+      <div id="dash-tipos-list"></div>
     </div>
 
     <button class="btn btn-secondary btn-block" onclick="sincronizar(true)">🔄 Actualizar dashboard</button>
@@ -365,6 +417,46 @@
   </div>
 </div>
 
+<!-- ================= MODAL ANDÉN (única vez por vehículo/fecha) ================= -->
+<div class="modal-overlay" id="anden-modal" style="display:none;">
+  <div class="modal">
+    <h3>¿En qué andén estás auditando?</h3>
+    <p class="hint">Se pregunta una sola vez al iniciar la auditoría de este vehículo.</p>
+    <div class="field">
+      <input id="anden-input" class="uppercase" placeholder="EJ: A12" oninput="this.value=this.value.toUpperCase()">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="confirmarAnden()">Confirmar</button>
+  </div>
+</div>
+
+<!-- ================= MODAL INCIDENCIA ================= -->
+<div class="modal-overlay" id="incidencia-modal" style="display:none;">
+  <div class="modal">
+    <h3>Reportar incidencia</h3>
+    <div class="field">
+      <label>Tipo de incidencia</label>
+      <select id="incidencia-tipo">
+        <option value="SOBRANTE">Producto sobrante</option>
+        <option value="DAÑADO">Producto dañado</option>
+        <option value="FALTANTE">Producto faltante</option>
+        <option value="OTRO">Otro</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Código / ISO (opcional)</label>
+      <input id="incidencia-codigo" class="uppercase" placeholder="EJ: ISO1670680">
+    </div>
+    <div class="field">
+      <label>Descripción</label>
+      <textarea id="incidencia-desc" placeholder="Describe lo encontrado..."></textarea>
+    </div>
+    <div class="row-gap">
+      <button class="btn btn-secondary btn-block" onclick="cerrarModalIncidencia()">Cancelar</button>
+      <button class="btn btn-primary btn-block" onclick="registrarIncidenciaUI()">Registrar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ===================== ESTADO ===================== */
 const CONFIG_PIN = '2108';
@@ -372,11 +464,20 @@ const LS_URL = 'aa_apps_script_url';
 const LS_AUDITOR = 'aa_auditor';
 const LS_MAESTRO_CACHE = 'aa_maestro_cache';
 const LS_AUDITADOS_CACHE = 'aa_auditados_cache';
+const LS_ANDENES_CACHE = 'aa_andenes_cache';
+const LS_INCIDENCIAS_CACHE = 'aa_incidencias_cache';
 const LS_QUEUE = 'aa_pending_queue';
+const LS_QUEUE_INC = 'aa_pending_queue_incidencias';
+const LS_FECHA = 'aa_fecha_seleccionada';
+const LS_ANDEN_LOCAL = 'aa_anden_local';
 
-let maestro = [];      // [{vehiculo, iso}]
-let auditados = [];    // [{vehiculo, iso, fecha, auditor}]
+let maestro = [];       // [{vehiculo, iso, horaEstimada, fecha}]
+let auditados = [];     // [{vehiculo, iso, fecha, fechaHora, auditor}]
+let andenes = [];       // [{fecha, vehiculo, anden, auditor, fechaHora}]
+let incidencias = [];   // [{fecha, anden, vehiculo, tipo, codigo, descripcion, auditor, fechaHora}]
 let vehiculoActual = '';
+let fechaActual = '';
+let andenActual = '';
 let jsonpCounter = 0;
 
 /* ===================== INIT ===================== */
@@ -387,8 +488,12 @@ window.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem(LS_AUDITOR, e.target.value);
   });
 
+  fechaActual = localStorage.getItem(LS_FECHA) || '';
   maestro = JSON.parse(localStorage.getItem(LS_MAESTRO_CACHE) || '[]');
   auditados = JSON.parse(localStorage.getItem(LS_AUDITADOS_CACHE) || '[]');
+  andenes = JSON.parse(localStorage.getItem(LS_ANDENES_CACHE) || '[]');
+  incidencias = JSON.parse(localStorage.getItem(LS_INCIDENCIAS_CACHE) || '[]');
+  renderFechaSelect();
   renderVehiculoSelect();
 
   document.getElementById('scan-input').addEventListener('keydown', e => {
@@ -405,11 +510,13 @@ window.addEventListener('DOMContentLoaded', () => {
     sincronizar(false);
   }
 
-  setInterval(() => sincronizar(false), 20000); // auto-sync cada 20s
+  setInterval(() => sincronizar(false), 20000);
   flushQueue();
+  flushQueueIncidencias();
 });
 
 function getUrl(){ return localStorage.getItem(LS_URL) || ''; }
+function getAuditor(){ return (document.getElementById('auditor-input').value || 'SIN NOMBRE').trim().toUpperCase(); }
 
 /* ===================== TABS ===================== */
 function showTab(tab){
@@ -455,7 +562,7 @@ function jsonpRequest(params){
     const script = document.createElement('script');
     const qs = new URLSearchParams(params);
     qs.set('callback', cbName);
-    qs.set('_', Date.now()); // evita cache
+    qs.set('_', Date.now());
     script.src = url + '?' + qs.toString();
     script.onerror = () => { cleanup(); reject('ERROR_RED'); };
     const timeout = setTimeout(() => { cleanup(); reject('TIMEOUT'); }, 15000);
@@ -473,72 +580,166 @@ function jsonpRequest(params){
 async function sincronizar(manual){
   if (!getUrl()) { if (manual) toast('Configura primero la URL en ⚙️ Config', 'err'); return; }
   try {
-    const [rMaestro, rAuditados] = await Promise.all([
+    const [rMaestro, rAuditados, rAndenes, rIncidencias] = await Promise.all([
       jsonpRequest({ action: 'maestro' }),
-      jsonpRequest({ action: 'auditados' })
+      jsonpRequest({ action: 'auditados' }),
+      jsonpRequest({ action: 'andenes' }),
+      jsonpRequest({ action: 'incidencias' })
     ]);
-    if (rMaestro.ok) {
-      maestro = rMaestro.data;
-      localStorage.setItem(LS_MAESTRO_CACHE, JSON.stringify(maestro));
-    }
-    if (rAuditados.ok) {
-      auditados = rAuditados.data;
-      localStorage.setItem(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
-    }
+    if (rMaestro.ok) { maestro = rMaestro.data; localStorage.setItem(LS_MAESTRO_CACHE, JSON.stringify(maestro)); }
+    if (rAuditados.ok) { auditados = rAuditados.data; localStorage.setItem(LS_AUDITADOS_CACHE, JSON.stringify(auditados)); }
+    if (rAndenes.ok) { andenes = rAndenes.data; localStorage.setItem(LS_ANDENES_CACHE, JSON.stringify(andenes)); }
+    if (rIncidencias.ok) { incidencias = rIncidencias.data; localStorage.setItem(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias)); }
+
+    renderFechaSelect();
     renderVehiculoSelect();
     if (vehiculoActual) renderVehiculoDetail(vehiculoActual);
     if (document.getElementById('tab-dashboard').style.display !== 'none') renderDashboard();
     if (manual) toast('Datos actualizados', 'ok');
     flushQueue();
+    flushQueueIncidencias();
   } catch (err) {
     if (manual) toast('No se pudo conectar. Revisa la URL o tu conexión.', 'err');
   }
 }
 
+/* ===================== SELECT FECHA ===================== */
+function fechasUnicas(){
+  const set = new Set(maestro.map(r => r.fecha).filter(Boolean));
+  return Array.from(set).sort().reverse();
+}
+function renderFechaSelect(){
+  const sel = document.getElementById('fecha-select');
+  const disponibles = fechasUnicas();
+  sel.innerHTML = '<option value="">-- Selecciona una fecha --</option>';
+  disponibles.forEach(f => {
+    const opt = document.createElement('option');
+    opt.value = f; opt.textContent = formatearFechaLarga(f);
+    sel.appendChild(opt);
+  });
+  if (fechaActual && disponibles.includes(fechaActual)) {
+    sel.value = fechaActual;
+  } else if (disponibles.length) {
+    fechaActual = disponibles[0];
+    sel.value = fechaActual;
+    localStorage.setItem(LS_FECHA, fechaActual);
+  } else {
+    fechaActual = '';
+  }
+  document.getElementById('dash-fecha-pill').textContent = fechaActual ? formatearFechaLarga(fechaActual) : 'Sin fecha seleccionada';
+}
+function formatearFechaLarga(f){
+  try {
+    const d = new Date(f + 'T00:00:00');
+    return d.toLocaleDateString('es-CL', { weekday:'short', day:'2-digit', month:'short', year:'numeric' });
+  } catch(e){ return f; }
+}
+function onFechaChange(){
+  fechaActual = document.getElementById('fecha-select').value;
+  localStorage.setItem(LS_FECHA, fechaActual);
+  document.getElementById('dash-fecha-pill').textContent = fechaActual ? formatearFechaLarga(fechaActual) : 'Sin fecha seleccionada';
+  vehiculoActual = '';
+  andenActual = '';
+  document.getElementById('vehiculo-select').value = '';
+  document.getElementById('veh-detail').style.display = 'none';
+  renderVehiculoSelect();
+  if (document.getElementById('tab-dashboard').style.display !== 'none') renderDashboard();
+}
+
 /* ===================== SELECT VEHÍCULO ===================== */
 function vehiculosUnicos(){
-  const set = new Set(maestro.map(r => r.vehiculo));
+  const set = new Set(maestro.filter(r => r.fecha === fechaActual).map(r => r.vehiculo));
   return Array.from(set).sort();
 }
 function renderVehiculoSelect(){
   const sel = document.getElementById('vehiculo-select');
   const prev = sel.value;
+  const disponibles = vehiculosUnicos();
   sel.innerHTML = '<option value="">-- Selecciona un vehículo --</option>';
-  vehiculosUnicos().forEach(v => {
+  disponibles.forEach(v => {
     const opt = document.createElement('option');
     opt.value = v; opt.textContent = v;
     sel.appendChild(opt);
   });
-  if (prev && vehiculosUnicos().includes(prev)) sel.value = prev;
+  if (prev && disponibles.includes(prev)) sel.value = prev;
 }
 function onVehiculoChange(){
   const v = document.getElementById('vehiculo-select').value;
   vehiculoActual = v;
+  andenActual = '';
   if (!v) { document.getElementById('veh-detail').style.display = 'none'; return; }
+
+  const anden = buscarAnden(fechaActual, v);
+  if (anden) {
+    andenActual = anden;
+    mostrarDetalleVehiculo();
+  } else {
+    abrirModalAnden();
+  }
+}
+function mostrarDetalleVehiculo(){
   document.getElementById('veh-detail').style.display = '';
-  renderVehiculoDetail(v);
+  renderVehiculoDetail(vehiculoActual);
   document.getElementById('scan-input').focus();
+}
+
+/* ===================== ANDÉN (única vez por fecha + vehículo) ===================== */
+function buscarAnden(fecha, v){
+  const enServidor = andenes.find(a => a.fecha === fecha && a.vehiculo === v);
+  if (enServidor) return enServidor.anden;
+  const local = JSON.parse(localStorage.getItem(LS_ANDEN_LOCAL) || '{}');
+  return local[fecha + '|' + v] || '';
+}
+function abrirModalAnden(){
+  document.getElementById('anden-input').value = '';
+  document.getElementById('anden-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('anden-input').focus(), 100);
+}
+async function confirmarAnden(){
+  const val = document.getElementById('anden-input').value.trim().toUpperCase();
+  if (!val) { toast('Ingresa el andén', 'err'); return; }
+  const fecha = fechaActual, v = vehiculoActual, auditor = getAuditor();
+
+  const local = JSON.parse(localStorage.getItem(LS_ANDEN_LOCAL) || '{}');
+  local[fecha + '|' + v] = val;
+  localStorage.setItem(LS_ANDEN_LOCAL, JSON.stringify(local));
+  andenActual = val;
+
+  document.getElementById('anden-modal').style.display = 'none';
+  mostrarDetalleVehiculo();
+
+  try {
+    const r = await jsonpRequest({ action: 'registrarAnden', fecha, vehiculo: v, anden: val, auditor });
+    if (r.ok) {
+      andenActual = r.anden;
+      andenes.push({ fecha, vehiculo: v, anden: r.anden, auditor, fechaHora: new Date().toISOString() });
+      localStorage.setItem(LS_ANDENES_CACHE, JSON.stringify(andenes));
+      if (vehiculoActual === v) renderVehiculoDetail(v);
+    }
+  } catch (err) {
+    // sin conexión: queda guardado localmente y se confirmará en el próximo sync
+  }
 }
 
 /* ===================== DETALLE VEHÍCULO ===================== */
 function isosDeVehiculo(v){
   return maestro
-    .filter(r => r.vehiculo === v)
+    .filter(r => r.vehiculo === v && r.fecha === fechaActual)
     .sort((a,b) => (a.horaEstimada||'').localeCompare(b.horaEstimada||''))
     .map(r => r.iso);
 }
 function horaEstimadaDe(v, iso){
-  const r = maestro.find(m => m.vehiculo === v && m.iso === iso);
+  const r = maestro.find(m => m.vehiculo === v && m.iso === iso && m.fecha === fechaActual);
   return r && r.horaEstimada ? new Date(r.horaEstimada).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'}) : '';
 }
 function isosAuditadasDe(v){
-  return auditados.filter(r => r.vehiculo === v);
+  return auditados.filter(r => r.vehiculo === v && r.fecha === fechaActual);
 }
 function queueLocal(){
   return JSON.parse(localStorage.getItem(LS_QUEUE) || '[]');
 }
 function isoEnCola(v, iso){
-  return queueLocal().some(q => q.vehiculo === v && q.iso === iso);
+  return queueLocal().some(q => q.vehiculo === v && q.iso === iso && q.fecha === fechaActual);
 }
 
 function renderVehiculoDetail(v){
@@ -546,7 +747,8 @@ function renderVehiculoDetail(v){
   const auditadasArr = isosAuditadasDe(v);
   const auditadasSet = new Set(auditadasArr.map(a => a.iso));
 
-  document.getElementById('veh-detail-title').textContent = 'Vehículo ' + v;
+  document.getElementById('veh-detail-title').innerHTML =
+    'Vehículo ' + v + (andenActual ? '<span class="anden-pill">ANDÉN ' + andenActual + '</span>' : '');
   const total = isos.length;
   const hechas = isos.filter(i => auditadasSet.has(i) || isoEnCola(v,i)).length;
   const pct = total ? Math.round((hechas/total)*100) : 0;
@@ -557,7 +759,7 @@ function renderVehiculoDetail(v){
   const list = document.getElementById('iso-list');
   list.innerHTML = '';
   if (!isos.length){
-    list.innerHTML = '<div class="empty">Este vehículo no tiene ISOs cargadas en el Maestro.</div>';
+    list.innerHTML = '<div class="empty">Este vehículo no tiene ISOs cargadas para la fecha seleccionada.</div>';
     return;
   }
   isos.forEach(iso => {
@@ -569,7 +771,7 @@ function renderVehiculoDetail(v){
     let badge, meta = '';
     if (reg) {
       badge = '<span class="badge ok">AUDITADA</span>';
-      meta = (reg.auditor || '') + (reg.fecha ? ' · ' + new Date(reg.fecha).toLocaleString() : '');
+      meta = (reg.auditor || '') + (reg.fechaHora ? ' · ' + new Date(reg.fechaHora).toLocaleString() : '');
     } else if (enCola) {
       badge = '<span class="badge sync">SIN SINCRONIZAR</span>';
     } else {
@@ -590,12 +792,13 @@ async function procesarScan(raw){
   if (!iso) return;
   const v = vehiculoActual;
   if (!v) { toast('Primero selecciona un vehículo', 'err'); return; }
+  if (!fechaActual) { toast('Primero selecciona la fecha a auditar', 'err'); return; }
 
-  const auditor = (document.getElementById('auditor-input').value || 'SIN NOMBRE').trim().toUpperCase();
+  const auditor = getAuditor();
 
   const perteneceAlVehiculo = isosDeVehiculo(v).includes(iso);
   if (!perteneceAlVehiculo) {
-    toast('❌ ISO ' + iso + ' no corresponde a este vehículo', 'err');
+    toast('❌ ISO ' + iso + ' no corresponde a este vehículo/fecha', 'err');
     return;
   }
   const yaAuditada = isosAuditadasDe(v).some(a => a.iso === iso) || isoEnCola(v, iso);
@@ -605,9 +808,8 @@ async function procesarScan(raw){
     return;
   }
 
-  // Optimista: agregar a la cola local y refrescar UI de inmediato
   const q = queueLocal();
-  q.push({ vehiculo: v, iso, auditor, fecha: new Date().toISOString() });
+  q.push({ vehiculo: v, iso, auditor, fecha: fechaActual, fechaHora: new Date().toISOString() });
   localStorage.setItem(LS_QUEUE, JSON.stringify(q));
   renderVehiculoDetail(v);
   toast('✅ ISO ' + iso + ' auditada', 'ok');
@@ -622,16 +824,16 @@ async function flushQueue(){
   const restante = [];
   for (const item of q) {
     try {
-      const r = await jsonpRequest({ action: 'registrar', vehiculo: item.vehiculo, iso: item.iso, auditor: item.auditor });
+      const r = await jsonpRequest({ action: 'registrar', vehiculo: item.vehiculo, iso: item.iso, auditor: item.auditor, fecha: item.fecha });
       if (r.ok) {
-        auditados.push({ vehiculo: item.vehiculo, iso: item.iso, fecha: item.fecha, auditor: item.auditor });
+        auditados.push({ vehiculo: item.vehiculo, iso: item.iso, fecha: item.fecha, fechaHora: item.fechaHora, auditor: item.auditor });
       } else if (r.error === 'YA_AUDITADA') {
-        // ya estaba, no hace falta reintentar
+        // ya estaba
       } else {
         restante.push(item);
       }
     } catch (err) {
-      restante.push(item); // sin conexión: reintentar luego
+      restante.push(item);
     }
   }
   localStorage.setItem(LS_QUEUE, JSON.stringify(restante));
@@ -639,7 +841,80 @@ async function flushQueue(){
   if (vehiculoActual) renderVehiculoDetail(vehiculoActual);
 }
 
+/* ===================== INCIDENCIAS ===================== */
+function abrirModalIncidencia(){
+  if (!vehiculoActual || !fechaActual) { toast('Selecciona fecha y vehículo primero', 'err'); return; }
+  document.getElementById('incidencia-tipo').value = 'SOBRANTE';
+  document.getElementById('incidencia-codigo').value = '';
+  document.getElementById('incidencia-desc').value = '';
+  document.getElementById('incidencia-modal').style.display = 'flex';
+}
+function cerrarModalIncidencia(){
+  document.getElementById('incidencia-modal').style.display = 'none';
+}
+function registrarIncidenciaUI(){
+  const tipo = document.getElementById('incidencia-tipo').value;
+  const codigo = document.getElementById('incidencia-codigo').value.trim().toUpperCase();
+  const descripcion = document.getElementById('incidencia-desc').value.trim();
+  const auditor = getAuditor();
+
+  const item = { fecha: fechaActual, anden: andenActual, vehiculo: vehiculoActual, tipo, codigo, descripcion, auditor, fechaHora: new Date().toISOString() };
+
+  const q = JSON.parse(localStorage.getItem(LS_QUEUE_INC) || '[]');
+  q.push(item);
+  localStorage.setItem(LS_QUEUE_INC, JSON.stringify(q));
+  incidencias.push(item);
+  localStorage.setItem(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias));
+
+  cerrarModalIncidencia();
+  toast('⚠️ Incidencia registrada', 'ok');
+  flushQueueIncidencias();
+}
+async function flushQueueIncidencias(){
+  if (!getUrl()) return;
+  let q = JSON.parse(localStorage.getItem(LS_QUEUE_INC) || '[]');
+  if (!q.length) return;
+  const restante = [];
+  for (const item of q) {
+    try {
+      const r = await jsonpRequest({
+        action: 'registrarIncidencia', fecha: item.fecha, anden: item.anden, vehiculo: item.vehiculo,
+        tipo: item.tipo, codigo: item.codigo, descripcion: item.descripcion, auditor: item.auditor
+      });
+      if (!r.ok) restante.push(item);
+    } catch (err) {
+      restante.push(item);
+    }
+  }
+  localStorage.setItem(LS_QUEUE_INC, JSON.stringify(restante));
+}
+
 /* ===================== DASHBOARD ===================== */
+function contarPor(arr, keyFn){
+  const map = {};
+  arr.forEach(item => {
+    const k = keyFn(item) || 'SIN DATO';
+    map[k] = (map[k] || 0) + 1;
+  });
+  return Object.entries(map).sort((a,b) => b[1]-a[1]);
+}
+function renderBarList(containerId, pares, color){
+  const cont = document.getElementById(containerId);
+  cont.innerHTML = '';
+  if (!pares.length){ cont.innerHTML = '<div class="empty">Sin datos para esta fecha.</div>'; return; }
+  const max = Math.max(...pares.map(p => p[1]));
+  pares.forEach(([label, count]) => {
+    const pct = max ? Math.round((count/max)*100) : 0;
+    const row = document.createElement('div');
+    row.className = 'veh-row';
+    row.innerHTML =
+      '<div class="v-name">' + label + '</div>' +
+      '<div class="v-bar"><div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%;background:'+color+'"></div></div></div>' +
+      '<div class="v-pct">' + count + '</div>';
+    cont.appendChild(row);
+  });
+}
+
 function renderDashboard(){
   const vehiculos = vehiculosUnicos();
   let totalIsos = 0, totalAuditadas = 0;
@@ -652,6 +927,7 @@ function renderDashboard(){
     return { v, total: isos.length, hechas, pct: isos.length ? Math.round((hechas/isos.length)*100) : 0 };
   }).sort((a,b) => a.pct - b.pct);
 
+  document.getElementById('dash-fecha-pill').textContent = fechaActual ? formatearFechaLarga(fechaActual) : 'Sin fecha seleccionada';
   document.getElementById('dash-vehiculos').textContent = vehiculos.length;
   document.getElementById('dash-total').textContent = totalIsos;
   document.getElementById('dash-pct').textContent = (totalIsos ? Math.round((totalAuditadas/totalIsos)*100) : 0) + '%';
@@ -659,19 +935,27 @@ function renderDashboard(){
   const cont = document.getElementById('dash-list');
   cont.innerHTML = '';
   if (!filas.length){
-    cont.innerHTML = '<div class="empty">Sin datos. Sincroniza o revisa la hoja Maestro.</div>';
-    return;
+    cont.innerHTML = '<div class="empty">Sin datos para esta fecha. Sincroniza o revisa la hoja de origen.</div>';
+  } else {
+    filas.forEach(f => {
+      const color = f.pct === 100 ? 'var(--green)' : (f.pct === 0 ? 'var(--red)' : 'var(--orange)');
+      const row = document.createElement('div');
+      row.className = 'veh-row';
+      row.innerHTML =
+        '<div class="v-name">' + f.v + '</div>' +
+        '<div class="v-bar"><div class="progress-bar"><div class="progress-fill" style="width:'+f.pct+'%;background:'+color+'"></div></div></div>' +
+        '<div class="v-pct">' + f.hechas + '/' + f.total + '</div>';
+      cont.appendChild(row);
+    });
   }
-  filas.forEach(f => {
-    const color = f.pct === 100 ? 'var(--green)' : (f.pct === 0 ? 'var(--red)' : 'var(--orange)');
-    const row = document.createElement('div');
-    row.className = 'veh-row';
-    row.innerHTML =
-      '<div class="v-name">' + f.v + '</div>' +
-      '<div class="v-bar"><div class="progress-bar"><div class="progress-fill" style="width:'+f.pct+'%;background:'+color+'"></div></div></div>' +
-      '<div class="v-pct">' + f.hechas + '/' + f.total + '</div>';
-    cont.appendChild(row);
-  });
+
+  const andenesDelDia = andenes.filter(a => a.fecha === fechaActual);
+  renderBarList('dash-andenes-list', contarPor(andenesDelDia, a => a.anden), 'var(--ikea-blue)');
+
+  const incidenciasDelDia = incidencias.filter(i => i.fecha === fechaActual);
+  const sobrantesDelDia = incidenciasDelDia.filter(i => i.tipo === 'SOBRANTE');
+  renderBarList('dash-sobrantes-list', contarPor(sobrantesDelDia, i => i.anden), 'var(--orange)');
+  renderBarList('dash-tipos-list', contarPor(incidenciasDelDia, i => i.tipo), 'var(--red)');
 }
 
 /* ===================== TOAST ===================== */
