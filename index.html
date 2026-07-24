@@ -130,6 +130,7 @@
   .btn-red{background:#FDE8E8;color:var(--red);border:1.5px solid #F6B8B4;}
   .btn-block{width:100%;}
   .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-link-back{background:none;border:none;color:var(--ikea-blue);font-weight:700;font-size:14px;cursor:pointer;padding:6px 0;margin-bottom:8px;}
 
   .progress-wrap{margin-top:10px;}
   .progress-bar{
@@ -174,13 +175,16 @@
     border-radius:8px;
     border:1.5px solid var(--border);
     background:#fff;
+    gap:8px;
   }
   .iso-row.done{
     background:#EAF6EC;
     border-color:#BFE3C4;
   }
+  .iso-row.clickable{cursor:pointer;}
   .iso-row .code{font-weight:800;font-size:15px;letter-spacing:.02em;}
   .iso-row .meta{font-size:11px;color:var(--muted);margin-top:2px;}
+  .iso-row .chevron{color:var(--muted);font-size:18px;flex-shrink:0;}
   .badge{
     font-size:11px;
     font-weight:700;
@@ -351,15 +355,10 @@
         <div class="progress-wrap">
           <div class="progress-bar"><div class="progress-fill" id="veh-progress-fill" style="width:0%"></div></div>
           <div class="progress-label">
-            <span id="veh-progress-text">0 / 0 auditadas</span>
+            <span id="veh-progress-text">0 / 0 ISOs completas</span>
             <span id="veh-progress-pct">0%</span>
           </div>
         </div>
-      </div>
-
-      <div class="scan-box">
-        <label>Escanear ISO</label>
-        <input id="scan-input" placeholder="Esperando escaneo..." autocomplete="off">
       </div>
 
       <button class="btn btn-yellow btn-block" style="margin-bottom:14px;" onclick="abrirIncidencia()">⚠️ Reportar incidencia (ej. producto sobrante)</button>
@@ -369,9 +368,30 @@
         <div id="inc-list"></div>
       </div>
 
-      <div class="card">
-        <h3>Listado de ISOs</h3>
+      <!-- Listado de ISOs (nivel 1) -->
+      <div class="card" id="iso-list-card">
+        <h3>Listado de ISOs — toca una para ver sus OLPN</h3>
         <div class="iso-list" id="iso-list"></div>
+      </div>
+
+      <!-- Detalle de una ISO: listado de OLPN (nivel 2) -->
+      <div class="card" id="iso-detalle-card" style="display:none;">
+        <button class="btn-link-back" onclick="volverAIsos()">← Volver al listado de ISOs</button>
+        <h3 id="iso-detalle-title">ISO</h3>
+        <div class="progress-wrap" style="margin-bottom:14px;">
+          <div class="progress-bar"><div class="progress-fill" id="iso-detalle-progress-fill" style="width:0%"></div></div>
+          <div class="progress-label">
+            <span id="iso-detalle-progress-text">0 / 0 OLPN auditadas</span>
+            <span id="iso-detalle-progress-pct">0%</span>
+          </div>
+        </div>
+
+        <div class="scan-box">
+          <label>Escanear OLPN</label>
+          <input id="olpn-scan-input" placeholder="Esperando escaneo..." autocomplete="off">
+        </div>
+
+        <div class="iso-list" id="olpn-list"></div>
       </div>
     </div>
 
@@ -390,7 +410,7 @@
     </div>
 
     <div class="card">
-      <h3>Avance por vehículo</h3>
+      <h3>Avance por vehículo (ISOs completas)</h3>
       <div id="dash-list"></div>
     </div>
 
@@ -407,6 +427,11 @@
     <div class="card">
       <h3>ISOs auditadas por andén</h3>
       <div id="dash-auditadas-anden"></div>
+    </div>
+
+    <div class="card">
+      <h3>OLPN auditadas por andén</h3>
+      <div id="dash-olpn-anden"></div>
     </div>
 
     <button class="btn btn-secondary btn-block" onclick="sincronizar(true)">🔄 Actualizar dashboard</button>
@@ -469,7 +494,7 @@
       </select>
     </div>
     <div class="field">
-      <label>Código / ISO (opcional)</label>
+      <label>Código / ISO / OLPN (opcional)</label>
       <input id="inc-codigo" class="uppercase" placeholder="EJ. ISO1670680" oninput="this.value=this.value.toUpperCase()">
     </div>
     <div class="field">
@@ -494,17 +519,22 @@ const LS_URL = 'aa_apps_script_url';
 const LS_AUDITOR = 'aa_auditor';
 const LS_MAESTRO_CACHE = 'aa_maestro_cache';
 const LS_AUDITADOS_CACHE = 'aa_auditados_cache';
+const LS_OLPN_MAESTRO_CACHE = 'aa_olpn_maestro_cache';
+const LS_OLPN_AUDITADOS_CACHE = 'aa_olpn_auditados_cache';
 const LS_INCIDENCIAS_CACHE = 'aa_incidencias_cache';
 const LS_QUEUE = 'aa_pending_queue';
 const LS_FECHA = 'aa_fecha_seleccionada';
 const LS_ANDENES = 'aa_andenes_map';
 
-let maestro = [];       // [{vehiculo, iso, horaEstimada, fecha}]
-let auditados = [];     // [{vehiculo, iso, fecha, anden, fechaHora, auditor}]
-let incidencias = [];   // [{fecha, anden, vehiculo, tipo, codigo, cantidad, descripcion, auditor, fechaHora}]
+let maestro = [];        // [{vehiculo, iso, horaEstimada, fecha}]
+let auditados = [];      // [{vehiculo, iso, fecha, anden, fechaHora, auditor}]  (respaldo directo por ISO)
+let olpnMaestro = [];    // [{iso, olpn}]
+let olpnAuditados = [];  // [{iso, olpn, vehiculo, fecha, anden, fechaHora, auditor}]
+let incidencias = [];    // [{fecha, anden, vehiculo, tipo, codigo, cantidad, descripcion, auditor, fechaHora}]
 let vehiculoActual = '';
 let fechaActual = '';
 let andenActual = '';
+let isoActual = '';
 let jsonpCounter = 0;
 
 /* ===================== INIT ===================== */
@@ -518,14 +548,16 @@ window.addEventListener('DOMContentLoaded', () => {
   fechaActual = localStorage.getItem(LS_FECHA) || '';
   maestro = JSON.parse(localStorage.getItem(LS_MAESTRO_CACHE) || '[]');
   auditados = JSON.parse(localStorage.getItem(LS_AUDITADOS_CACHE) || '[]');
+  olpnMaestro = JSON.parse(localStorage.getItem(LS_OLPN_MAESTRO_CACHE) || '[]');
+  olpnAuditados = JSON.parse(localStorage.getItem(LS_OLPN_AUDITADOS_CACHE) || '[]');
   incidencias = JSON.parse(localStorage.getItem(LS_INCIDENCIAS_CACHE) || '[]');
   renderFechaSelect();
   renderVehiculoSelect();
 
-  document.getElementById('scan-input').addEventListener('keydown', e => {
+  document.getElementById('olpn-scan-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      procesarScan(e.target.value);
+      procesarScanOlpn(e.target.value);
       e.target.value = '';
     }
   });
@@ -536,7 +568,7 @@ window.addEventListener('DOMContentLoaded', () => {
     sincronizar(false);
   }
 
-  setInterval(() => sincronizar(false), 20000); // auto-sync cada 20s
+  setInterval(() => sincronizar(false), 20000);
   flushQueue();
 });
 
@@ -604,26 +636,26 @@ function jsonpRequest(params){
 async function sincronizar(manual){
   if (!getUrl()) { if (manual) toast('Configura primero la URL en ⚙️ Config', 'err'); return; }
   try {
-    const [rMaestro, rAuditados, rIncidencias] = await Promise.all([
+    const [rMaestro, rAuditados, rIncidencias, rOlpn, rOlpnAuditados] = await Promise.all([
       jsonpRequest({ action: 'maestro' }),
       jsonpRequest({ action: 'auditados' }),
-      jsonpRequest({ action: 'incidencias' })
+      jsonpRequest({ action: 'incidencias' }),
+      jsonpRequest({ action: 'olpn' }),
+      jsonpRequest({ action: 'olpnAuditados' })
     ]);
-    if (rMaestro.ok) {
-      maestro = rMaestro.data;
-      localStorage.setItem(LS_MAESTRO_CACHE, JSON.stringify(maestro));
-    }
-    if (rAuditados.ok) {
-      auditados = rAuditados.data;
-      localStorage.setItem(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
-    }
-    if (rIncidencias.ok) {
-      incidencias = rIncidencias.data;
-      localStorage.setItem(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias));
-    }
+    if (rMaestro.ok) { maestro = rMaestro.data; localStorage.setItem(LS_MAESTRO_CACHE, JSON.stringify(maestro)); }
+    if (rAuditados.ok) { auditados = rAuditados.data; localStorage.setItem(LS_AUDITADOS_CACHE, JSON.stringify(auditados)); }
+    if (rIncidencias.ok) { incidencias = rIncidencias.data; localStorage.setItem(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias)); }
+    if (rOlpn.ok) { olpnMaestro = rOlpn.data; localStorage.setItem(LS_OLPN_MAESTRO_CACHE, JSON.stringify(olpnMaestro)); }
+    if (rOlpnAuditados.ok) { olpnAuditados = rOlpnAuditados.data; localStorage.setItem(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados)); }
+
     renderFechaSelect();
     renderVehiculoSelect();
-    if (vehiculoActual) { renderVehiculoDetail(vehiculoActual); renderIncidenciasDeVehiculo(); }
+    if (vehiculoActual) {
+      renderVehiculoDetail(vehiculoActual);
+      renderIncidenciasDeVehiculo();
+      if (isoActual) renderDetalleIso();
+    }
     if (document.getElementById('tab-dashboard').style.display !== 'none') renderDashboard();
     if (manual) toast('Datos actualizados', 'ok');
     flushQueue();
@@ -667,7 +699,7 @@ function onFechaChange(){
   fechaActual = document.getElementById('fecha-select').value;
   localStorage.setItem(LS_FECHA, fechaActual);
   document.getElementById('dash-fecha-pill').textContent = fechaActual ? formatearFechaLarga(fechaActual) : 'Sin fecha seleccionada';
-  vehiculoActual = ''; andenActual = '';
+  vehiculoActual = ''; andenActual = ''; isoActual = '';
   document.getElementById('vehiculo-select').value = '';
   document.getElementById('veh-detail').style.display = 'none';
   renderVehiculoSelect();
@@ -695,6 +727,7 @@ function renderVehiculoSelect(){
 function onVehiculoChange(){
   const v = document.getElementById('vehiculo-select').value;
   vehiculoActual = v;
+  isoActual = '';
   if (!v) { document.getElementById('veh-detail').style.display = 'none'; return; }
 
   const andenGuardado = obtenerAndenSesion(fechaActual, v);
@@ -713,6 +746,8 @@ function obtenerAndenSesion(fecha, vehiculo){
   if (map[key]) return map[key];
   const enAuditados = auditados.find(a => a.fecha === fecha && a.vehiculo === vehiculo && a.anden);
   if (enAuditados) { map[key] = enAuditados.anden; localStorage.setItem(LS_ANDENES, JSON.stringify(map)); return enAuditados.anden; }
+  const enOlpn = olpnAuditados.find(o => o.fecha === fecha && o.vehiculo === vehiculo && o.anden);
+  if (enOlpn) { map[key] = enOlpn.anden; localStorage.setItem(LS_ANDENES, JSON.stringify(map)); return enOlpn.anden; }
   const enIncidencias = incidencias.find(i => i.fecha === fecha && i.vehiculo === vehiculo && i.anden);
   if (enIncidencias) { map[key] = enIncidencias.anden; localStorage.setItem(LS_ANDENES, JSON.stringify(map)); return enIncidencias.anden; }
   return '';
@@ -741,12 +776,14 @@ function cancelarAnden(){
 }
 function mostrarDetalleVehiculo(){
   document.getElementById('veh-detail').style.display = '';
+  document.getElementById('iso-detalle-card').style.display = 'none';
+  document.getElementById('iso-list-card').style.display = '';
+  isoActual = '';
   renderVehiculoDetail(vehiculoActual);
   renderIncidenciasDeVehiculo();
-  document.getElementById('scan-input').focus();
 }
 
-/* ===================== DETALLE VEHÍCULO ===================== */
+/* ===================== NIVEL 0: DATOS DE LA FECHA/VEHÍCULO ===================== */
 function isosDeVehiculo(v){
   return maestro
     .filter(r => r.vehiculo === v && r.fecha === fechaActual)
@@ -767,19 +804,52 @@ function isoEnCola(v, iso){
   return queueLocal().some(q => q.kind === 'auditoria' && q.vehiculo === v && q.iso === iso && q.fecha === fechaActual);
 }
 
+/* ===================== NIVEL 1: OLPN POR ISO ===================== */
+function olpnDeIso(iso){
+  return olpnMaestro.filter(o => o.iso === iso).map(o => o.olpn);
+}
+function olpnAuditadasDeIso(iso){
+  return olpnAuditados.filter(o => o.iso === iso && o.fecha === fechaActual);
+}
+function olpnEnCola(iso, olpn){
+  return queueLocal().some(q => q.kind === 'olpn' && q.iso === iso && q.olpn === olpn && q.fecha === fechaActual);
+}
+
+// Progreso de una ISO: si tiene OLPN cargadas, se basa en OLPN auditadas.
+// Si no tiene OLPN cargadas (aún no se ingresaron datos), se usa el respaldo
+// de auditoría directa de la ISO (comportamiento anterior).
+function progresoIso(v, iso){
+  const totalOlpnArr = olpnDeIso(iso);
+  if (totalOlpnArr.length) {
+    const auditadasArr = olpnAuditadasDeIso(iso);
+    const auditadasSet = new Set(auditadasArr.map(a => a.olpn));
+    const hechas = totalOlpnArr.filter(o => auditadasSet.has(o) || olpnEnCola(iso, o)).length;
+    const total = totalOlpnArr.length;
+    return { tieneOlpn: true, total, hechas, pct: total ? Math.round((hechas/total)*100) : 0 };
+  }
+  const reg = isosAuditadasDe(v).find(a => a.iso === iso);
+  const enCola = isoEnCola(v, iso);
+  const hechas = (reg || enCola) ? 1 : 0;
+  return { tieneOlpn: false, total: 1, hechas, pct: hechas * 100 };
+}
+
+/* ===================== DETALLE VEHÍCULO (nivel 0) ===================== */
 function renderVehiculoDetail(v){
   const isos = isosDeVehiculo(v);
-  const auditadasArr = isosAuditadasDe(v);
-  const auditadasSet = new Set(auditadasArr.map(a => a.iso));
+  const total = isos.length;
+  const completas = isos.filter(iso => progresoIso(v, iso).pct === 100).length;
+  const pct = total ? Math.round((completas/total)*100) : 0;
 
   document.getElementById('veh-detail-title').innerHTML = 'Vehículo ' + v + '<span class="anden-pill">Andén ' + (andenActual || '?') + '</span>';
-  const total = isos.length;
-  const hechas = isos.filter(i => auditadasSet.has(i) || isoEnCola(v,i)).length;
-  const pct = total ? Math.round((hechas/total)*100) : 0;
   document.getElementById('veh-progress-fill').style.width = pct + '%';
-  document.getElementById('veh-progress-text').textContent = hechas + ' / ' + total + ' auditadas';
+  document.getElementById('veh-progress-text').textContent = completas + ' / ' + total + ' ISOs completas';
   document.getElementById('veh-progress-pct').textContent = pct + '%';
 
+  renderListaIsos(v);
+}
+
+function renderListaIsos(v){
+  const isos = isosDeVehiculo(v);
   const list = document.getElementById('iso-list');
   list.innerHTML = '';
   if (!isos.length){
@@ -787,8 +857,66 @@ function renderVehiculoDetail(v){
     return;
   }
   isos.forEach(iso => {
-    const reg = auditadasArr.find(a => a.iso === iso);
-    const enCola = isoEnCola(v, iso);
+    const p = progresoIso(v, iso);
+    const row = document.createElement('div');
+    row.className = 'iso-row clickable' + (p.pct === 100 ? ' done' : '');
+    row.onclick = () => abrirDetalleIso(iso);
+
+    let badge;
+    if (p.pct === 100) badge = '<span class="badge ok">COMPLETA</span>';
+    else if (p.hechas > 0) badge = '<span class="badge pend">EN PROCESO</span>';
+    else badge = '<span class="badge pend">PENDIENTE</span>';
+
+    const hora = horaEstimadaDe(v, iso);
+    let meta = p.tieneOlpn ? (p.hechas + ' / ' + p.total + ' OLPN auditadas') : (p.pct === 100 ? 'Auditada' : 'Sin OLPN cargadas');
+    if (hora) meta += ' · Llegada estimada: ' + hora;
+
+    row.innerHTML =
+      '<div><div class="code">' + iso + '</div><div class="meta">' + meta + '</div></div>' +
+      '<div style="display:flex;align-items:center;gap:8px;">' + badge + '<span class="chevron">›</span></div>';
+    list.appendChild(row);
+  });
+}
+
+/* ===================== NAVEGACIÓN A DETALLE DE ISO (nivel 1) ===================== */
+function abrirDetalleIso(iso){
+  isoActual = iso;
+  document.getElementById('iso-list-card').style.display = 'none';
+  document.getElementById('iso-detalle-card').style.display = '';
+  renderDetalleIso();
+  document.getElementById('olpn-scan-input').focus();
+}
+function volverAIsos(){
+  isoActual = '';
+  document.getElementById('iso-detalle-card').style.display = 'none';
+  document.getElementById('iso-list-card').style.display = '';
+  renderVehiculoDetail(vehiculoActual);
+}
+
+function renderDetalleIso(){
+  const v = vehiculoActual, iso = isoActual;
+  if (!iso) return;
+  const p = progresoIso(v, iso);
+
+  document.getElementById('iso-detalle-title').textContent = 'ISO ' + iso;
+  document.getElementById('iso-detalle-progress-fill').style.width = p.pct + '%';
+  document.getElementById('iso-detalle-progress-text').textContent =
+    p.hechas + ' / ' + p.total + (p.tieneOlpn ? ' OLPN auditadas' : (p.hechas ? ' auditada' : ' pendiente'));
+  document.getElementById('iso-detalle-progress-pct').textContent = p.pct + '%';
+
+  const cont = document.getElementById('olpn-list');
+  cont.innerHTML = '';
+
+  if (!p.tieneOlpn) {
+    cont.innerHTML = '<div class="empty">Esta ISO no tiene OLPN cargadas todavía. Escanea el código de la ISO para marcarla como auditada.</div>';
+    return;
+  }
+
+  const olpns = olpnDeIso(iso);
+  const auditadasArr = olpnAuditadasDeIso(iso);
+  olpns.forEach(olpn => {
+    const reg = auditadasArr.find(a => a.olpn === olpn);
+    const enCola = olpnEnCola(iso, olpn);
     const done = !!reg || enCola;
     const row = document.createElement('div');
     row.className = 'iso-row' + (done ? ' done' : '');
@@ -800,44 +928,48 @@ function renderVehiculoDetail(v){
       badge = '<span class="badge sync">SIN SINCRONIZAR</span>';
     } else {
       badge = '<span class="badge pend">PENDIENTE</span>';
-      const hora = horaEstimadaDe(v, iso);
-      if (hora) meta = 'Llegada estimada: ' + hora;
     }
     row.innerHTML =
-      '<div><div class="code">' + iso + '</div>' + (meta ? '<div class="meta">'+meta+'</div>' : '') + '</div>' +
-      badge;
-    list.appendChild(row);
+      '<div><div class="code">' + olpn + '</div>' + (meta ? '<div class="meta">' + meta + '</div>' : '') + '</div>' + badge;
+    cont.appendChild(row);
   });
 }
 
-/* ===================== ESCANEO ===================== */
-async function procesarScan(raw){
-  const iso = (raw || '').trim().toUpperCase();
-  if (!iso) return;
-  const v = vehiculoActual;
-  if (!v) { toast('Primero selecciona un vehículo', 'err'); return; }
+/* ===================== ESCANEO DE OLPN (y respaldo de ISO directa) ===================== */
+async function procesarScanOlpn(raw){
+  const codigo = (raw || '').trim().toUpperCase();
+  if (!codigo) return;
+  const v = vehiculoActual, iso = isoActual;
+  if (!v || !iso) return;
   if (!fechaActual) { toast('Primero selecciona la fecha a auditar', 'err'); return; }
 
   const auditor = (document.getElementById('auditor-input').value || 'SIN NOMBRE').trim().toUpperCase();
+  const p = progresoIso(v, iso);
 
-  const perteneceAlVehiculo = isosDeVehiculo(v).includes(iso);
-  if (!perteneceAlVehiculo) {
-    toast('❌ ISO ' + iso + ' no corresponde a este vehículo/fecha', 'err');
+  if (!p.tieneOlpn) {
+    // Respaldo: esta ISO no tiene OLPN cargadas, se audita directamente por su propio código.
+    if (codigo !== iso) { toast('❌ El código escaneado no corresponde a esta ISO', 'err'); return; }
+    const yaAuditada = isosAuditadasDe(v).some(a => a.iso === iso) || isoEnCola(v, iso);
+    if (yaAuditada) { toast('⚠️ Esta ISO ya estaba auditada', 'err'); renderDetalleIso(); return; }
+    const q = queueLocal();
+    q.push({ kind: 'auditoria', vehiculo: v, iso, auditor, fecha: fechaActual, anden: andenActual, fechaHora: new Date().toISOString() });
+    localStorage.setItem(LS_QUEUE, JSON.stringify(q));
+    renderDetalleIso();
+    toast('✅ ISO auditada', 'ok');
+    flushQueue();
     return;
   }
-  const yaAuditada = isosAuditadasDe(v).some(a => a.iso === iso) || isoEnCola(v, iso);
-  if (yaAuditada) {
-    toast('⚠️ ISO ' + iso + ' ya estaba auditada', 'err');
-    renderVehiculoDetail(v);
-    return;
-  }
+
+  const pertenece = olpnDeIso(iso).includes(codigo);
+  if (!pertenece) { toast('❌ OLPN ' + codigo + ' no corresponde a esta ISO', 'err'); return; }
+  const yaAuditada = olpnAuditadasDeIso(iso).some(a => a.olpn === codigo) || olpnEnCola(iso, codigo);
+  if (yaAuditada) { toast('⚠️ OLPN ' + codigo + ' ya estaba auditada', 'err'); renderDetalleIso(); return; }
 
   const q = queueLocal();
-  q.push({ kind:'auditoria', vehiculo: v, iso, auditor, fecha: fechaActual, anden: andenActual, fechaHora: new Date().toISOString() });
+  q.push({ kind: 'olpn', iso, olpn: codigo, vehiculo: v, fecha: fechaActual, anden: andenActual, auditor, fechaHora: new Date().toISOString() });
   localStorage.setItem(LS_QUEUE, JSON.stringify(q));
-  renderVehiculoDetail(v);
-  toast('✅ ISO ' + iso + ' auditada', 'ok');
-
+  renderDetalleIso();
+  toast('✅ OLPN ' + codigo + ' auditada', 'ok');
   flushQueue();
 }
 
@@ -904,7 +1036,7 @@ function renderIncidenciasDeVehiculo(){
   });
 }
 
-/* ===================== SINCRONIZACIÓN DE COLA (auditorías + incidencias) ===================== */
+/* ===================== SINCRONIZACIÓN DE COLA ===================== */
 async function flushQueue(){
   if (!getUrl()) return;
   let q = queueLocal();
@@ -920,23 +1052,37 @@ async function flushQueue(){
           descripcion: item.descripcion, auditor: item.auditor
         });
         if (!r.ok) restante.push(item);
+      } else if (item.kind === 'olpn') {
+        const r = await jsonpRequest({ action: 'registrarOlpn', iso: item.iso, olpn: item.olpn, vehiculo: item.vehiculo, fecha: item.fecha, anden: item.anden, auditor: item.auditor });
+        if (r.ok) {
+          olpnAuditados.push({ iso: item.iso, olpn: item.olpn, vehiculo: item.vehiculo, fecha: item.fecha, anden: item.anden, fechaHora: item.fechaHora, auditor: item.auditor });
+        } else if (r.error === 'YA_AUDITADA') {
+          // ya estaba, no reintenta
+        } else {
+          restante.push(item);
+        }
       } else {
         const r = await jsonpRequest({ action: 'registrar', vehiculo: item.vehiculo, iso: item.iso, auditor: item.auditor, fecha: item.fecha, anden: item.anden });
         if (r.ok) {
           auditados.push({ vehiculo: item.vehiculo, iso: item.iso, fecha: item.fecha, anden: item.anden, fechaHora: item.fechaHora, auditor: item.auditor });
         } else if (r.error === 'YA_AUDITADA') {
-          // ya estaba, no hace falta reintentar
+          // ya estaba, no reintenta
         } else {
           restante.push(item);
         }
       }
     } catch (err) {
-      restante.push(item); // sin conexión: reintentar luego
+      restante.push(item);
     }
   }
   localStorage.setItem(LS_QUEUE, JSON.stringify(restante));
   localStorage.setItem(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
-  if (vehiculoActual) { renderVehiculoDetail(vehiculoActual); renderIncidenciasDeVehiculo(); }
+  localStorage.setItem(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados));
+  if (vehiculoActual) {
+    renderVehiculoDetail(vehiculoActual);
+    renderIncidenciasDeVehiculo();
+    if (isoActual) renderDetalleIso();
+  }
 }
 
 /* ===================== DASHBOARD ===================== */
@@ -960,20 +1106,19 @@ function renderBarras(contId, dataObj, colorVar){
 
 function renderDashboard(){
   const vehiculos = vehiculosUnicos();
-  let totalIsos = 0, totalAuditadas = 0;
+  let totalIsos = 0, isosCompletas = 0;
   const filas = vehiculos.map(v => {
     const isos = isosDeVehiculo(v);
-    const auditadasSet = new Set(isosAuditadasDe(v).map(a => a.iso));
-    const hechas = isos.filter(i => auditadasSet.has(i) || isoEnCola(v, i)).length;
+    const completas = isos.filter(iso => progresoIso(v, iso).pct === 100).length;
     totalIsos += isos.length;
-    totalAuditadas += hechas;
-    return { v, total: isos.length, hechas, pct: isos.length ? Math.round((hechas/isos.length)*100) : 0 };
+    isosCompletas += completas;
+    return { v, total: isos.length, hechas: completas, pct: isos.length ? Math.round((completas/isos.length)*100) : 0 };
   }).sort((a,b) => a.pct - b.pct);
 
   document.getElementById('dash-fecha-pill').textContent = fechaActual ? formatearFechaLarga(fechaActual) : 'Sin fecha seleccionada';
   document.getElementById('dash-vehiculos').textContent = vehiculos.length;
   document.getElementById('dash-total').textContent = totalIsos;
-  document.getElementById('dash-pct').textContent = (totalIsos ? Math.round((totalAuditadas/totalIsos)*100) : 0) + '%';
+  document.getElementById('dash-pct').textContent = (totalIsos ? Math.round((isosCompletas/totalIsos)*100) : 0) + '%';
 
   const cont = document.getElementById('dash-list');
   cont.innerHTML = '';
@@ -992,13 +1137,11 @@ function renderDashboard(){
     });
   }
 
-  // ---- Incidencias por tipo (del día seleccionado) ----
   const incDia = incidencias.filter(i => i.fecha === fechaActual);
   const porTipo = {};
   incDia.forEach(i => { porTipo[i.tipo] = (porTipo[i.tipo]||0) + (Number(i.cantidad)||1); });
   renderBarras('dash-inc-tipo', porTipo, 'var(--orange)');
 
-  // ---- Productos sobrantes por andén (del día seleccionado) ----
   const sobrantesPorAnden = {};
   incDia.filter(i => i.tipo === 'PRODUCTO SOBRANTE').forEach(i => {
     const key = i.anden || 'SIN ANDÉN';
@@ -1006,7 +1149,6 @@ function renderDashboard(){
   });
   renderBarras('dash-sobrantes-anden', sobrantesPorAnden, 'var(--orange)');
 
-  // ---- ISOs auditadas por andén (del día seleccionado) ----
   const auditadosDia = auditados.filter(a => a.fecha === fechaActual);
   const auditadasPorAnden = {};
   auditadosDia.forEach(a => {
@@ -1014,6 +1156,14 @@ function renderDashboard(){
     auditadasPorAnden[key] = (auditadasPorAnden[key]||0) + 1;
   });
   renderBarras('dash-auditadas-anden', auditadasPorAnden, 'var(--green)');
+
+  const olpnDia = olpnAuditados.filter(o => o.fecha === fechaActual);
+  const olpnPorAnden = {};
+  olpnDia.forEach(o => {
+    const key = o.anden || 'SIN ANDÉN';
+    olpnPorAnden[key] = (olpnPorAnden[key]||0) + 1;
+  });
+  renderBarras('dash-olpn-anden', olpnPorAnden, 'var(--ikea-blue)');
 }
 
 /* ===================== TOAST ===================== */
