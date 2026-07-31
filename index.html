@@ -238,6 +238,17 @@
   }
   .iso-row.clickable{cursor:pointer;}
   .iso-row .code{font-weight:800;font-size:15px;letter-spacing:.02em;}
+  .iso-row .qty-tag{
+    display:inline-block;
+    background:var(--ikea-blue);
+    color:#fff;
+    font-size:11px;
+    font-weight:700;
+    padding:1px 7px;
+    border-radius:20px;
+    margin-left:6px;
+    vertical-align:middle;
+  }
   .iso-row .meta{font-size:11px;color:var(--muted);margin-top:2px;}
   .iso-row .chevron{color:var(--muted);font-size:18px;flex-shrink:0;}
   .badge{
@@ -879,23 +890,40 @@ function isoEnCola(v, iso){
 function olpnDeIso(iso){
   return olpnMaestro.filter(o => o.iso === iso).map(o => o.olpn);
 }
+// Lista de OLPN únicos de una ISO junto con la cantidad esperada de cada uno
+// (un mismo código puede repetirse varias veces en el maestro = varias unidades)
+function olpnUnicosDeIso(iso){
+  const counts = {};
+  olpnDeIso(iso).forEach(o => { counts[o] = (counts[o] || 0) + 1; });
+  return Object.keys(counts).map(olpn => ({ olpn, cantidad: counts[olpn] }));
+}
 function olpnAuditadasDeIso(iso){
   return olpnAuditados.filter(o => o.iso === iso && o.fecha === fechaActual);
 }
+// Cuántas unidades de un OLPN concreto ya fueron auditadas y sincronizadas
+function cantidadAuditadaDe(iso, olpn){
+  return olpnAuditadasDeIso(iso).filter(a => a.olpn === olpn).length;
+}
+// Cuántas unidades de un OLPN concreto están en cola local (pendientes de sincronizar)
+function cantidadEnColaDe(iso, olpn){
+  return queueLocal().filter(q => q.kind === 'olpn' && q.iso === iso && q.olpn === olpn && q.fecha === fechaActual).length;
+}
 function olpnEnCola(iso, olpn){
-  return queueLocal().some(q => q.kind === 'olpn' && q.iso === iso && q.olpn === olpn && q.fecha === fechaActual);
+  return cantidadEnColaDe(iso, olpn) > 0;
 }
 
 // Progreso de una ISO: si tiene OLPN cargadas, se basa en OLPN auditadas.
 // Si no tiene OLPN cargadas (aún no se ingresaron datos), se usa el respaldo
 // de auditoría directa de la ISO (comportamiento anterior).
 function progresoIso(v, iso){
-  const totalOlpnArr = olpnDeIso(iso);
-  if (totalOlpnArr.length) {
-    const auditadasArr = olpnAuditadasDeIso(iso);
-    const auditadasSet = new Set(auditadasArr.map(a => a.olpn));
-    const hechas = totalOlpnArr.filter(o => auditadasSet.has(o) || olpnEnCola(iso, o)).length;
-    const total = totalOlpnArr.length;
+  const unicos = olpnUnicosDeIso(iso);
+  if (unicos.length) {
+    let total = 0, hechas = 0;
+    unicos.forEach(u => {
+      total += u.cantidad;
+      const escaneadas = cantidadAuditadaDe(iso, u.olpn) + cantidadEnColaDe(iso, u.olpn);
+      hechas += Math.min(escaneadas, u.cantidad);
+    });
     return { tieneOlpn: true, total, hechas, pct: total ? Math.round((hechas/total)*100) : 0 };
   }
   const reg = isosAuditadasDe(v).find(a => a.iso === iso);
@@ -983,27 +1011,37 @@ function renderDetalleIso(){
     return;
   }
 
-  const olpns = olpnDeIso(iso);
-  const auditadasArr = olpnAuditadasDeIso(iso);
-  olpns.forEach(olpn => {
-    const reg = auditadasArr.find(a => a.olpn === olpn);
-    const enCola = olpnEnCola(iso, olpn);
-    const done = !!reg || enCola;
+  const unicos = olpnUnicosDeIso(iso);
+  unicos.forEach(u => {
+    const { olpn, cantidad } = u;
+    const auditadas = cantidadAuditadaDe(iso, olpn);
+    const enCola = cantidadEnColaDe(iso, olpn);
+    const hechasUnidad = Math.min(auditadas + enCola, cantidad);
+    const done = hechasUnidad >= cantidad;
     const row = document.createElement('div');
     row.className = 'iso-row' + (done ? ' done' : '');
+
+    const cantidadTag = cantidad > 1 ? ' <span class="qty-tag">×' + cantidad + '</span>' : '';
+
     let badge, meta = '';
-    if (reg) {
-      badge = '<span class="badge ok">AUDITADA</span>';
-      meta = (reg.auditor || '') + (reg.fechaHora ? ' · ' + new Date(reg.fechaHora).toLocaleString() : '');
-    } else if (enCola) {
+    if (done && enCola === 0) {
+      badge = '<span class="badge ok">AUDITADA' + (cantidad > 1 ? ' (' + cantidad + '/' + cantidad + ')' : '') + '</span>';
+      const ultima = auditadasDeCodigo(iso, olpn).slice(-1)[0];
+      if (ultima) meta = (ultima.auditor || '') + (ultima.fechaHora ? ' · ' + new Date(ultima.fechaHora).toLocaleString() : '');
+    } else if (done && enCola > 0) {
       badge = '<span class="badge sync">SIN SINCRONIZAR</span>';
+    } else if (hechasUnidad > 0) {
+      badge = '<span class="badge pend">EN PROCESO (' + hechasUnidad + '/' + cantidad + ')</span>';
     } else {
-      badge = '<span class="badge pend">PENDIENTE</span>';
+      badge = '<span class="badge pend">PENDIENTE' + (cantidad > 1 ? ' (0/' + cantidad + ')' : '') + '</span>';
     }
     row.innerHTML =
-      '<div><div class="code">' + olpn + '</div>' + (meta ? '<div class="meta">' + meta + '</div>' : '') + '</div>' + badge;
+      '<div><div class="code">' + olpn + cantidadTag + '</div>' + (meta ? '<div class="meta">' + meta + '</div>' : '') + '</div>' + badge;
     cont.appendChild(row);
   });
+}
+function auditadasDeCodigo(iso, olpn){
+  return olpnAuditadasDeIso(iso).filter(a => a.olpn === olpn);
 }
 
 /* ===================== ESCANEO DE OLPN (y respaldo de ISO directa) ===================== */
@@ -1033,14 +1071,21 @@ async function procesarScanOlpn(raw){
 
   const pertenece = olpnDeIso(iso).includes(codigo);
   if (!pertenece) { toast('❌ OLPN ' + codigo + ' no corresponde a esta ISO', 'err'); return; }
-  const yaAuditada = olpnAuditadasDeIso(iso).some(a => a.olpn === codigo) || olpnEnCola(iso, codigo);
-  if (yaAuditada) { toast('⚠️ OLPN ' + codigo + ' ya estaba auditada', 'err'); renderDetalleIso(); return; }
+  const unico = olpnUnicosDeIso(iso).find(u => u.olpn === codigo);
+  const cantidadEsperada = unico ? unico.cantidad : 1;
+  const escaneadas = cantidadAuditadaDe(iso, codigo) + cantidadEnColaDe(iso, codigo);
+  if (escaneadas >= cantidadEsperada) {
+    toast('⚠️ OLPN ' + codigo + ' ya alcanzó la cantidad esperada (' + cantidadEsperada + ')', 'err');
+    renderDetalleIso();
+    return;
+  }
 
   const q = queueLocal();
   q.push({ kind: 'olpn', iso, olpn: codigo, vehiculo: v, fecha: fechaActual, anden: andenActual, auditor, fechaHora: new Date().toISOString() });
   localStorage.setItem(LS_QUEUE, JSON.stringify(q));
   renderDetalleIso();
-  toast('✅ OLPN ' + codigo + ' auditada', 'ok');
+  const nuevoConteo = escaneadas + 1;
+  toast('✅ OLPN ' + codigo + ' auditada' + (cantidadEsperada > 1 ? ' (' + nuevoConteo + '/' + cantidadEsperada + ')' : ''), 'ok');
   flushQueue();
 }
 
@@ -1181,11 +1226,10 @@ function avanceOlpnPorVehiculo(){
     const isos = isosDeVehiculo(v);
     let total = 0, hechas = 0;
     isos.forEach(iso => {
-      const olpns = olpnDeIso(iso);
-      if (olpns.length) {
-        total += olpns.length;
-        const auditadasSet = new Set(olpnAuditadasDeIso(iso).map(a => a.olpn));
-        hechas += olpns.filter(o => auditadasSet.has(o) || olpnEnCola(iso, o)).length;
+      const p = progresoIso(v, iso);
+      if (p.tieneOlpn) {
+        total += p.total;
+        hechas += p.hechas;
       }
     });
     return { v, total, hechas, pct: total ? Math.round((hechas/total)*100) : 0 };
