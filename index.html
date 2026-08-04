@@ -771,7 +771,7 @@ function jsonpRequest(params){
     qs.set('_', Date.now());
     script.src = url + '?' + qs.toString();
     script.onerror = () => { cleanup(); reject('ERROR_RED'); };
-    const timeout = setTimeout(() => { cleanup(); reject('TIMEOUT'); }, 15000);
+    const timeout = setTimeout(() => { cleanup(); reject('TIMEOUT'); }, 45000);
     function cleanup(){
       delete window[cbName];
       clearTimeout(timeout);
@@ -786,18 +786,15 @@ function jsonpRequest(params){
 async function sincronizar(manual){
   if (!getUrl()) { if (manual) toast('Configura primero la URL en ⚙️ Config', 'err'); return; }
   try {
-    const [rMaestro, rAuditados, rIncidencias, rOlpn, rOlpnAuditados] = await Promise.all([
-      jsonpRequest({ action: 'maestro' }),
-      jsonpRequest({ action: 'auditados' }),
-      jsonpRequest({ action: 'incidencias' }),
-      jsonpRequest({ action: 'olpn' }),
-      jsonpRequest({ action: 'olpnAuditados' })
-    ]);
-    if (rMaestro.ok) { maestro = rMaestro.data; localStorage.setItem(LS_MAESTRO_CACHE, JSON.stringify(maestro)); }
-    if (rAuditados.ok) { auditados = rAuditados.data; localStorage.setItem(LS_AUDITADOS_CACHE, JSON.stringify(auditados)); }
-    if (rIncidencias.ok) { incidencias = rIncidencias.data; localStorage.setItem(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias)); }
-    if (rOlpn.ok) { olpnMaestro = rOlpn.data; localStorage.setItem(LS_OLPN_MAESTRO_CACHE, JSON.stringify(olpnMaestro)); reindexOlpnMaestro(); }
-    if (rOlpnAuditados.ok) { olpnAuditados = rOlpnAuditados.data; localStorage.setItem(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados)); reindexOlpnAuditados(); }
+    const r = await jsonpRequest({ action: 'sincronizarTodo' });
+    if (!r.ok) throw new Error(r.error || 'ERROR_SERVIDOR');
+    const d = r.data;
+
+    maestro = d.maestro; localStorage.setItem(LS_MAESTRO_CACHE, JSON.stringify(maestro));
+    auditados = d.auditados; localStorage.setItem(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
+    incidencias = d.incidencias; localStorage.setItem(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias));
+    olpnMaestro = d.olpnMaestro; localStorage.setItem(LS_OLPN_MAESTRO_CACHE, JSON.stringify(olpnMaestro)); reindexOlpnMaestro();
+    olpnAuditados = d.olpnAuditados; localStorage.setItem(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados)); reindexOlpnAuditados();
 
     renderFechaSelect();
     renderVehiculoSelect();
