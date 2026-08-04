@@ -542,6 +542,7 @@
     <div id="config-form-step" style="display:none;">
       <label>URL de Apps Script (termina en /exec)</label>
       <input id="config-url-input" placeholder="https://script.google.com/macros/s/.../exec">
+      <div id="config-diagnostico" style="margin-top:12px; font-size:12px; color:#4a5a68; background:#F5F8FC; border:1px solid #DCE4EC; border-radius:8px; padding:10px 12px; line-height:1.6;"></div>
       <div class="row-gap" style="margin-top:14px;">
         <button class="btn btn-secondary btn-block" onclick="closeConfig()">Cancelar</button>
         <button class="btn btn-primary btn-block" onclick="saveConfig()">Guardar</button>
@@ -602,6 +603,16 @@
 /* ===================== ESTADO ===================== */
 const CONFIG_PIN = '2108';
 const LS_URL = 'aa_apps_script_url';
+// Igual que en el backend: recorta espacios, mayúsculas, y elimina
+// caracteres invisibles (espacio de ancho cero, BOM, espacio duro) que
+// pueden colarse al escanear o pegar códigos, y que hacían que un ISO/OLPN
+// "igual a la vista" no coincidiera con el dato que llega del servidor.
+function normalizarCodigo(v){
+  return String(v || '')
+    .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, '')
+    .trim()
+    .toUpperCase();
+}
 const LS_AUDITOR = 'aa_auditor';
 const LS_MAESTRO_CACHE = 'aa_maestro_cache';
 const LS_AUDITADOS_CACHE = 'aa_auditados_cache';
@@ -632,8 +643,10 @@ let olpnAuditadosPorIsoIndex = {}; // iso -> [{olpn, fecha, ...}, ...]
 function reindexOlpnMaestro(){
   olpnPorIsoIndex = {};
   olpnMaestro.forEach(o => {
-    if (!olpnPorIsoIndex[o.iso]) olpnPorIsoIndex[o.iso] = [];
-    olpnPorIsoIndex[o.iso].push(o.olpn);
+    const iso = normalizarCodigo(o.iso);
+    const olpn = normalizarCodigo(o.olpn);
+    if (!olpnPorIsoIndex[iso]) olpnPorIsoIndex[iso] = [];
+    olpnPorIsoIndex[iso].push(olpn);
   });
   olpnUnicosPorIsoIndex = {};
   Object.keys(olpnPorIsoIndex).forEach(iso => {
@@ -719,9 +732,23 @@ function checkPin(){
     document.getElementById('config-pin-step').style.display = 'none';
     document.getElementById('config-form-step').style.display = '';
     document.getElementById('config-url-input').value = getUrl();
+    renderDiagnostico();
   } else {
     toast('PIN incorrecto', 'err');
   }
+}
+// Contador simple para verificar, sin abrir la consola, si los datos
+// realmente llegaron a la app (útil para diagnosticar "no cargan las OLPN").
+function renderDiagnostico(){
+  const el = document.getElementById('config-diagnostico');
+  if (!el) return;
+  const isosConOlpn = Object.keys(olpnPorIsoIndex).length;
+  el.innerHTML =
+    '<b>Datos cargados actualmente:</b><br>' +
+    '• ISOs (maestro): ' + maestro.length + '<br>' +
+    '• OLPN cargadas: ' + olpnMaestro.length + ' (en ' + isosConOlpn + ' ISOs distintas)<br>' +
+    '• OLPN auditadas: ' + olpnAuditados.length + '<br>' +
+    '• Incidencias: ' + incidencias.length;
 }
 function saveConfig(){
   const url = document.getElementById('config-url-input').value.trim();
@@ -1043,7 +1070,7 @@ function renderListaIsos(v){
 
 /* ===================== ESCANEO DE ISO (desde el listado) ===================== */
 function procesarScanIso(raw){
-  const codigo = (raw || '').trim().toUpperCase();
+  const codigo = normalizarCodigo(raw);
   if (!codigo) return;
   const v = vehiculoActual;
   if (!v) { toast('Selecciona un vehículo primero', 'err'); return; }
@@ -1122,7 +1149,7 @@ function auditadasDeCodigo(iso, olpn){
 
 /* ===================== ESCANEO DE OLPN (y respaldo de ISO directa) ===================== */
 async function procesarScanOlpn(raw){
-  const codigo = (raw || '').trim().toUpperCase();
+  const codigo = normalizarCodigo(raw);
   if (!codigo) return;
   const v = vehiculoActual, iso = isoActual;
   if (!v || !iso) return;
