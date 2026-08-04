@@ -770,8 +770,16 @@ function jsonpRequest(params){
     qs.set('callback', cbName);
     qs.set('_', Date.now());
     script.src = url + '?' + qs.toString();
-    script.onerror = () => { cleanup(); reject('ERROR_RED'); };
-    const timeout = setTimeout(() => { cleanup(); reject('TIMEOUT'); }, 45000);
+    script.onerror = (ev) => {
+      cleanup();
+      console.error('[jsonpRequest] ERROR_RED cargando script:', script.src, ev);
+      reject('ERROR_RED: no se pudo cargar el script (revisa la URL, o bloqueadores de anuncios/CSP)');
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      console.error('[jsonpRequest] TIMEOUT esperando respuesta de:', script.src);
+      reject('TIMEOUT: el servidor no respondió a tiempo');
+    }, 45000);
     function cleanup(){
       delete window[cbName];
       clearTimeout(timeout);
@@ -807,7 +815,8 @@ async function sincronizar(manual){
     if (manual) toast('Datos actualizados', 'ok');
     flushQueue();
   } catch (err) {
-    if (manual) toast('No se pudo conectar. Revisa la URL o tu conexión.', 'err');
+    console.error('[sincronizar] Falló la sincronización:', err);
+    if (manual) toast('No se pudo conectar: ' + (err && err.message ? err.message : err), 'err');
   }
 }
 
