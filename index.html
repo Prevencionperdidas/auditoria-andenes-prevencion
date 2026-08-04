@@ -781,9 +781,13 @@ function jsonpRequest(params){
       reject('TIMEOUT: el servidor no respondió a tiempo');
     }, 45000);
     function cleanup(){
-      delete window[cbName];
+      // En vez de borrar el callback de inmediato, lo dejamos como no-op:
+      // si la respuesta llega tarde (justo después del timeout), no revienta
+      // con "ReferenceError: ... is not defined" — simplemente se ignora.
+      window[cbName] = function(){};
       clearTimeout(timeout);
       if (script.parentNode) script.parentNode.removeChild(script);
+      setTimeout(() => { delete window[cbName]; }, 60000);
     }
     window[cbName] = (data) => { cleanup(); resolve(data); };
     document.body.appendChild(script);
