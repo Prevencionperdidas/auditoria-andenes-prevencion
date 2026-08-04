@@ -757,7 +757,7 @@ async function probarConexion(){
   const urlOriginal = getUrl();
   localStorage.setItem(LS_URL, url); // temporal, para que jsonpRequest la use en esta prueba
 
-  el.innerHTML = '⏳ Probando conexión, espera hasta 45 segundos...';
+  el.innerHTML = '⏳ Probando conexión, puede tardar hasta 2 minutos con tu volumen de datos actual...';
   const inicio = Date.now();
   try {
     const r = await jsonpRequest({ action: 'maestro' });
@@ -817,7 +817,7 @@ function jsonpRequest(params){
       cleanup();
       console.error('[jsonpRequest] TIMEOUT esperando respuesta de:', script.src);
       reject('TIMEOUT: el servidor no respondió a tiempo');
-    }, 45000);
+    }, 120000);
     function cleanup(){
       // En vez de borrar el callback de inmediato, lo dejamos como no-op:
       // si la respuesta llega tarde (justo después del timeout), no revienta
