@@ -542,7 +542,10 @@
     <div id="config-form-step" style="display:none;">
       <label>URL de Apps Script (termina en /exec)</label>
       <input id="config-url-input" placeholder="https://script.google.com/macros/s/.../exec">
+      <button class="btn btn-secondary btn-block" style="margin-top:10px;" onclick="probarConexion()">🔌 Probar conexión ahora</button>
+      <div id="config-test-resultado" style="margin-top:8px; font-size:12px; line-height:1.5; white-space:pre-wrap;"></div>
       <div id="config-diagnostico" style="margin-top:12px; font-size:12px; color:#4a5a68; background:#F5F8FC; border:1px solid #DCE4EC; border-radius:8px; padding:10px 12px; line-height:1.6;"></div>
+      <div style="margin-top:8px; font-size:10px; color:#9aa7b3; text-align:center;">Versión de la app: <b id="config-version"></b></div>
       <div class="row-gap" style="margin-top:14px;">
         <button class="btn btn-secondary btn-block" onclick="closeConfig()">Cancelar</button>
         <button class="btn btn-primary btn-block" onclick="saveConfig()">Guardar</button>
@@ -602,6 +605,9 @@
 <script>
 /* ===================== ESTADO ===================== */
 const CONFIG_PIN = '2108';
+// Identificador de versión visible en pantalla (Config), para confirmar de
+// un vistazo si el dispositivo está usando el archivo más reciente.
+const APP_BUILD = '2026-08-03.1 (sincronización unificada)';
 const LS_URL = 'aa_apps_script_url';
 // Igual que en el backend: recorta espacios, mayúsculas, y elimina
 // caracteres invisibles (espacio de ancho cero, BOM, espacio duro) que
@@ -732,9 +738,41 @@ function checkPin(){
     document.getElementById('config-pin-step').style.display = 'none';
     document.getElementById('config-form-step').style.display = '';
     document.getElementById('config-url-input').value = getUrl();
+    document.getElementById('config-version').textContent = APP_BUILD;
+    document.getElementById('config-test-resultado').innerHTML = '';
     renderDiagnostico();
   } else {
     toast('PIN incorrecto', 'err');
+  }
+}
+// Prueba de conexión autocontenida: no requiere abrir la consola. Usa la
+// URL que esté escrita en el campo en ese momento (aunque no se haya
+// guardado todavía), y muestra el resultado o el error tal cual, directo
+// en la pantalla.
+async function probarConexion(){
+  const url = document.getElementById('config-url-input').value.trim();
+  const el = document.getElementById('config-test-resultado');
+  if (!url) { el.innerHTML = '<span style="color:#D33A2C">⚠️ Escribe primero una URL.</span>'; return; }
+
+  const urlOriginal = getUrl();
+  localStorage.setItem(LS_URL, url); // temporal, para que jsonpRequest la use en esta prueba
+
+  el.innerHTML = '⏳ Probando conexión, espera hasta 45 segundos...';
+  const inicio = Date.now();
+  try {
+    const r = await jsonpRequest({ action: 'maestro' });
+    const segundos = ((Date.now() - inicio) / 1000).toFixed(1);
+    if (r && r.ok) {
+      el.innerHTML = '<span style="color:#1E8E3E">✅ Conexión exitosa en ' + segundos + 's. Se encontraron ' + (r.data ? r.data.length : 0) + ' registros en "simpli".</span>';
+    } else {
+      el.innerHTML = '<span style="color:#D33A2C">⚠️ El servidor respondió pero con error: ' + (r && r.error ? r.error : 'desconocido') + '</span>';
+    }
+  } catch (err) {
+    const segundos = ((Date.now() - inicio) / 1000).toFixed(1);
+    el.innerHTML = '<span style="color:#D33A2C">❌ Falló tras ' + segundos + 's: ' + (err && err.message ? err.message : err) + '</span>';
+  } finally {
+    // Restaura la URL guardada si el usuario solo estaba probando y cancela después.
+    localStorage.setItem(LS_URL, urlOriginal);
   }
 }
 // Contador simple para verificar, sin abrir la consola, si los datos
