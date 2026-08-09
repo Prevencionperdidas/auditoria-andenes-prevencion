@@ -607,8 +607,22 @@
 const CONFIG_PIN = '2108';
 // Identificador de versión visible en pantalla (Config), para confirmar de
 // un vistazo si el dispositivo está usando el archivo más reciente.
-const APP_BUILD = '2026-08-03.4 (sync acotado a hoy+mañana)';
+const APP_BUILD = '2026-08-09.1 (fix cuota localStorage)';
 const LS_URL = 'aa_apps_script_url';
+// Guarda en localStorage sin romper el flujo si se excede la cuota del
+// navegador (~5-10MB). Antes, un error de "quota exceeded" al cachear
+// (p. ej. con catálogos grandes de OLPN) hacía fallar TODA la
+// sincronización con "No se pudo conectar", aunque los datos ya hubieran
+// llegado bien del servidor.
+function guardarCache(key, value){
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (e) {
+    console.warn('[guardarCache] No se pudo guardar "' + key + '" en caché (se sigue usando en memoria):', e);
+    return false;
+  }
+}
 // Igual que en el backend: recorta espacios, mayúsculas, y elimina
 // caracteres invisibles (espacio de ancho cero, BOM, espacio duro) que
 // pueden colarse al escanear o pegar códigos, y que hacían que un ISO/OLPN
@@ -674,7 +688,7 @@ window.addEventListener('DOMContentLoaded', () => {
   const savedAuditor = localStorage.getItem(LS_AUDITOR);
   if (savedAuditor) document.getElementById('auditor-input').value = savedAuditor;
   document.getElementById('auditor-input').addEventListener('input', e => {
-    localStorage.setItem(LS_AUDITOR, e.target.value);
+    guardarCache(LS_AUDITOR, e.target.value);
   });
 
   fechaActual = localStorage.getItem(LS_FECHA) || '';
@@ -755,7 +769,7 @@ async function probarConexion(){
   if (!url) { el.innerHTML = '<span style="color:#D33A2C">⚠️ Escribe primero una URL.</span>'; return; }
 
   const urlOriginal = getUrl();
-  localStorage.setItem(LS_URL, url); // temporal, para que jsonpRequest la use en esta prueba
+  guardarCache(LS_URL, url); // temporal, para que jsonpRequest la use en esta prueba
 
   el.innerHTML = '⏳ Probando conexión, puede tardar hasta 2 minutos con tu volumen de datos actual...';
   const inicio = Date.now();
@@ -772,7 +786,7 @@ async function probarConexion(){
     el.innerHTML = '<span style="color:#D33A2C">❌ Falló tras ' + segundos + 's: ' + (err && err.message ? err.message : err) + '</span>';
   } finally {
     // Restaura la URL guardada si el usuario solo estaba probando y cancela después.
-    localStorage.setItem(LS_URL, urlOriginal);
+    guardarCache(LS_URL, urlOriginal);
   }
 }
 // Contador simple para verificar, sin abrir la consola, si los datos
@@ -793,7 +807,7 @@ function renderDiagnostico(){
 function saveConfig(){
   const url = document.getElementById('config-url-input').value.trim();
   if (!url) { toast('Ingresa una URL válida', 'err'); return; }
-  localStorage.setItem(LS_URL, url);
+  guardarCache(LS_URL, url);
   closeConfig();
   toast('Configuración guardada', 'ok');
   sincronizar(true);
@@ -842,11 +856,11 @@ async function sincronizar(manual){
     if (!r.ok) throw new Error(r.error || 'ERROR_SERVIDOR');
     const d = r.data;
 
-    maestro = d.maestro; localStorage.setItem(LS_MAESTRO_CACHE, JSON.stringify(maestro));
-    auditados = d.auditados; localStorage.setItem(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
-    incidencias = d.incidencias; localStorage.setItem(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias));
-    olpnMaestro = d.olpnMaestro; localStorage.setItem(LS_OLPN_MAESTRO_CACHE, JSON.stringify(olpnMaestro)); reindexOlpnMaestro();
-    olpnAuditados = d.olpnAuditados; localStorage.setItem(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados)); reindexOlpnAuditados();
+    maestro = d.maestro; guardarCache(LS_MAESTRO_CACHE, JSON.stringify(maestro));
+    auditados = d.auditados; guardarCache(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
+    incidencias = d.incidencias; guardarCache(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias));
+    olpnMaestro = d.olpnMaestro; guardarCache(LS_OLPN_MAESTRO_CACHE, JSON.stringify(olpnMaestro)); reindexOlpnMaestro();
+    olpnAuditados = d.olpnAuditados; guardarCache(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados)); reindexOlpnAuditados();
     ultimoRangoSincronizado = d.rangoFechas || [];
 
     renderFechaSelect();
@@ -884,7 +898,7 @@ function renderFechaSelect(){
   } else if (disponibles.length) {
     fechaActual = disponibles[0];
     sel.value = fechaActual;
-    localStorage.setItem(LS_FECHA, fechaActual);
+    guardarCache(LS_FECHA, fechaActual);
   } else {
     fechaActual = '';
   }
@@ -898,7 +912,7 @@ function formatearFechaLarga(f){
 }
 function onFechaChange(){
   fechaActual = document.getElementById('fecha-select').value;
-  localStorage.setItem(LS_FECHA, fechaActual);
+  guardarCache(LS_FECHA, fechaActual);
   document.getElementById('dash-fecha-pill').textContent = fechaActual ? formatearFechaLarga(fechaActual) : 'Sin fecha seleccionada';
   vehiculoActual = ''; andenActual = ''; isoActual = '';
   document.getElementById('vehiculo-select').value = '';
@@ -946,17 +960,17 @@ function obtenerAndenSesion(fecha, vehiculo){
   const key = fecha + '|' + vehiculo;
   if (map[key]) return map[key];
   const enAuditados = auditados.find(a => a.fecha === fecha && a.vehiculo === vehiculo && a.anden);
-  if (enAuditados) { map[key] = enAuditados.anden; localStorage.setItem(LS_ANDENES, JSON.stringify(map)); return enAuditados.anden; }
+  if (enAuditados) { map[key] = enAuditados.anden; guardarCache(LS_ANDENES, JSON.stringify(map)); return enAuditados.anden; }
   const enOlpn = olpnAuditados.find(o => o.fecha === fecha && o.vehiculo === vehiculo && o.anden);
-  if (enOlpn) { map[key] = enOlpn.anden; localStorage.setItem(LS_ANDENES, JSON.stringify(map)); return enOlpn.anden; }
+  if (enOlpn) { map[key] = enOlpn.anden; guardarCache(LS_ANDENES, JSON.stringify(map)); return enOlpn.anden; }
   const enIncidencias = incidencias.find(i => i.fecha === fecha && i.vehiculo === vehiculo && i.anden);
-  if (enIncidencias) { map[key] = enIncidencias.anden; localStorage.setItem(LS_ANDENES, JSON.stringify(map)); return enIncidencias.anden; }
+  if (enIncidencias) { map[key] = enIncidencias.anden; guardarCache(LS_ANDENES, JSON.stringify(map)); return enIncidencias.anden; }
   return '';
 }
 function guardarAndenSesion(fecha, vehiculo, anden){
   const map = JSON.parse(localStorage.getItem(LS_ANDENES) || '{}');
   map[fecha + '|' + vehiculo] = anden;
-  localStorage.setItem(LS_ANDENES, JSON.stringify(map));
+  guardarCache(LS_ANDENES, JSON.stringify(map));
 }
 function abrirModalAnden(){
   document.getElementById('anden-input').value = '';
@@ -1006,7 +1020,7 @@ function queueLocal(){
   return _queueCache;
 }
 function saveQueueLocal(q){
-  localStorage.setItem(LS_QUEUE, JSON.stringify(q));
+  guardarCache(LS_QUEUE, JSON.stringify(q));
   _queueCache = q;
 }
 function isoEnCola(v, iso){
@@ -1274,7 +1288,7 @@ function guardarIncidencia(){
   q.push(item);
   saveQueueLocal(q);
   incidencias.push(item);
-  localStorage.setItem(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias));
+  guardarCache(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias));
 
   cerrarIncidencia();
   renderIncidenciasDeVehiculo();
@@ -1346,8 +1360,8 @@ async function flushQueue(){
     }
   }
   saveQueueLocal(restante);
-  localStorage.setItem(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
-  localStorage.setItem(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados));
+  guardarCache(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
+  guardarCache(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados));
   reindexOlpnAuditados();
   if (vehiculoActual) {
     renderVehiculoDetail(vehiculoActual);
