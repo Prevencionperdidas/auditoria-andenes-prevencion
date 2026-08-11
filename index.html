@@ -607,7 +607,7 @@
 const CONFIG_PIN = '2108';
 // Identificador de versión visible en pantalla (Config), para confirmar de
 // un vistazo si el dispositivo está usando el archivo más reciente.
-const APP_BUILD = '2026-08-09.1 (fix cuota localStorage)';
+const APP_BUILD = '2026-08-10.1 (cola de escaneos con prioridad de guardado)';
 const LS_URL = 'aa_apps_script_url';
 // Guarda en localStorage sin romper el flujo si se excede la cuota del
 // navegador (~5-10MB). Antes, un error de "quota exceeded" al cachear
@@ -859,7 +859,11 @@ async function sincronizar(manual){
     maestro = d.maestro; guardarCache(LS_MAESTRO_CACHE, JSON.stringify(maestro));
     auditados = d.auditados; guardarCache(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
     incidencias = d.incidencias; guardarCache(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias));
-    olpnMaestro = d.olpnMaestro; guardarCache(LS_OLPN_MAESTRO_CACHE, JSON.stringify(olpnMaestro)); reindexOlpnMaestro();
+    // El catálogo de OLPN es, con diferencia, lo más pesado para guardar en
+    // localStorage, y se vuelve a descargar en cada sincronización de
+    // todas formas. Se deja solo en memoria (no en caché) para no competir
+    // por espacio con la cola de escaneos pendientes, que sí es crítica.
+    olpnMaestro = d.olpnMaestro; reindexOlpnMaestro();
     olpnAuditados = d.olpnAuditados; guardarCache(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados)); reindexOlpnAuditados();
     ultimoRangoSincronizado = d.rangoFechas || [];
 
@@ -1020,8 +1024,29 @@ function queueLocal(){
   return _queueCache;
 }
 function saveQueueLocal(q){
-  guardarCache(LS_QUEUE, JSON.stringify(q));
-  _queueCache = q;
+  _queueCache = q; // el estado en memoria es la verdad inmediata, pase lo que pase con el guardado
+  const jsonQ = JSON.stringify(q);
+  if (guardarCache(LS_QUEUE, jsonQ)) return;
+
+  // Si falló por cuota, la cola de escaneos pendientes (trabajo real, no
+  // recuperable si se pierde) tiene PRIORIDAD sobre los catálogos grandes
+  // (maestro/OLPN), que sí se pueden volver a descargar con una
+  // sincronización. Se liberan esos cachés grandes y se reintenta guardar
+  // la cola, para no perder auditorías ya escaneadas si el dispositivo
+  // recarga la página.
+  console.warn('[saveQueueLocal] Cuota llena: liberando cachés grandes para proteger la cola de escaneos pendientes.');
+  try { localStorage.removeItem(LS_OLPN_MAESTRO_CACHE); } catch (e) {}
+  try { localStorage.removeItem(LS_MAESTRO_CACHE); } catch (e) {}
+  try { localStorage.removeItem(LS_AUDITADOS_CACHE); } catch (e) {}
+  try { localStorage.removeItem(LS_INCIDENCIAS_CACHE); } catch (e) {}
+  try { localStorage.removeItem(LS_OLPN_AUDITADOS_CACHE); } catch (e) {}
+
+  if (!guardarCache(LS_QUEUE, jsonQ)) {
+    // Última instancia: si ni así entra, al menos avisa en pantalla en vez
+    // de fallar en silencio (esto sí sería grave: se perdería el escaneo
+    // si se recarga la página antes de sincronizar).
+    toast('⚠️ Memoria del navegador llena: sincroniza pronto, no cierres la app', 'err');
+  }
 }
 function isoEnCola(v, iso){
   return queueLocal().some(q => q.kind === 'auditoria' && q.vehiculo === v && q.iso === iso && q.fecha === fechaActual);
