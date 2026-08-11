@@ -607,7 +607,7 @@
 const CONFIG_PIN = '2108';
 // Identificador de versión visible en pantalla (Config), para confirmar de
 // un vistazo si el dispositivo está usando el archivo más reciente.
-const APP_BUILD = '2026-08-10.1 (cola de escaneos con prioridad de guardado)';
+const APP_BUILD = '2026-08-10.2 (fix carrera en sincronizacion de cola)';
 const LS_URL = 'aa_apps_script_url';
 // Guarda en localStorage sin romper el flujo si se excede la cuota del
 // navegador (~5-10MB). Antes, un error de "quota exceeded" al cachear
@@ -1346,52 +1346,71 @@ function renderIncidenciasDeVehiculo(){
 }
 
 /* ===================== SINCRONIZACIÓN DE COLA ===================== */
+// Evita que varias sincronizaciones de la cola corran al mismo tiempo.
+// Antes, si escaneabas OLPN rápido (uno tras otro), cada escaneo disparaba
+// su propio flushQueue() y podían superponerse: uno terminaba y GUARDABA
+// una "foto" vieja de la cola, borrando de encima un escaneo que se había
+// agregado mientras tanto. Eso hacía que un OLPN recién escaneado pareciera
+// desaparecer un momento (aunque ya había quedado bien registrado en el
+// servidor, por eso reaparecía como "auditada" en la siguiente sincronización).
+let flushEnProgreso = false;
+let flushReintentoPendiente = false;
 async function flushQueue(){
   if (!getUrl()) return;
-  let q = queueLocal();
-  if (!q.length) return;
-  const restante = [];
-  for (const item of q) {
-    try {
-      if (item.kind === 'incidencia') {
-        const r = await jsonpRequest({
-          action: 'registrarIncidencia',
-          fecha: item.fecha, anden: item.anden, vehiculo: item.vehiculo,
-          tipo: item.tipo, codigo: item.codigo, cantidad: item.cantidad,
-          descripcion: item.descripcion, auditor: item.auditor
-        });
-        if (!r.ok) restante.push(item);
-      } else if (item.kind === 'olpn') {
-        const r = await jsonpRequest({ action: 'registrarOlpn', iso: item.iso, olpn: item.olpn, vehiculo: item.vehiculo, fecha: item.fecha, anden: item.anden, auditor: item.auditor });
-        if (r.ok) {
-          olpnAuditados.push({ iso: item.iso, olpn: item.olpn, vehiculo: item.vehiculo, fecha: item.fecha, anden: item.anden, fechaHora: item.fechaHora, auditor: item.auditor });
-        } else if (r.error === 'YA_AUDITADA') {
-          // ya estaba, no reintenta
+  if (flushEnProgreso) { flushReintentoPendiente = true; return; }
+  flushEnProgreso = true;
+  try {
+    let q = queueLocal();
+    if (!q.length) return;
+    const restante = [];
+    for (const item of q) {
+      try {
+        if (item.kind === 'incidencia') {
+          const r = await jsonpRequest({
+            action: 'registrarIncidencia',
+            fecha: item.fecha, anden: item.anden, vehiculo: item.vehiculo,
+            tipo: item.tipo, codigo: item.codigo, cantidad: item.cantidad,
+            descripcion: item.descripcion, auditor: item.auditor
+          });
+          if (!r.ok) restante.push(item);
+        } else if (item.kind === 'olpn') {
+          const r = await jsonpRequest({ action: 'registrarOlpn', iso: item.iso, olpn: item.olpn, vehiculo: item.vehiculo, fecha: item.fecha, anden: item.anden, auditor: item.auditor });
+          if (r.ok) {
+            olpnAuditados.push({ iso: item.iso, olpn: item.olpn, vehiculo: item.vehiculo, fecha: item.fecha, anden: item.anden, fechaHora: item.fechaHora, auditor: item.auditor });
+          } else if (r.error === 'YA_AUDITADA') {
+            // ya estaba, no reintenta
+          } else {
+            restante.push(item);
+          }
         } else {
-          restante.push(item);
+          const r = await jsonpRequest({ action: 'registrar', vehiculo: item.vehiculo, iso: item.iso, auditor: item.auditor, fecha: item.fecha, anden: item.anden });
+          if (r.ok) {
+            auditados.push({ vehiculo: item.vehiculo, iso: item.iso, fecha: item.fecha, anden: item.anden, fechaHora: item.fechaHora, auditor: item.auditor });
+          } else if (r.error === 'YA_AUDITADA') {
+            // ya estaba, no reintenta
+          } else {
+            restante.push(item);
+          }
         }
-      } else {
-        const r = await jsonpRequest({ action: 'registrar', vehiculo: item.vehiculo, iso: item.iso, auditor: item.auditor, fecha: item.fecha, anden: item.anden });
-        if (r.ok) {
-          auditados.push({ vehiculo: item.vehiculo, iso: item.iso, fecha: item.fecha, anden: item.anden, fechaHora: item.fechaHora, auditor: item.auditor });
-        } else if (r.error === 'YA_AUDITADA') {
-          // ya estaba, no reintenta
-        } else {
-          restante.push(item);
-        }
+      } catch (err) {
+        restante.push(item);
       }
-    } catch (err) {
-      restante.push(item);
     }
-  }
-  saveQueueLocal(restante);
-  guardarCache(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
-  guardarCache(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados));
-  reindexOlpnAuditados();
-  if (vehiculoActual) {
-    renderVehiculoDetail(vehiculoActual);
-    renderIncidenciasDeVehiculo();
-    if (isoActual) renderDetalleIso();
+    saveQueueLocal(restante);
+    guardarCache(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
+    guardarCache(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados));
+    reindexOlpnAuditados();
+    if (vehiculoActual) {
+      renderVehiculoDetail(vehiculoActual);
+      renderIncidenciasDeVehiculo();
+      if (isoActual) renderDetalleIso();
+    }
+  } finally {
+    flushEnProgreso = false;
+    if (flushReintentoPendiente) {
+      flushReintentoPendiente = false;
+      flushQueue(); // procesa lo que se haya agregado mientras tanto, con la cola ya actualizada
+    }
   }
 }
 
