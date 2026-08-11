@@ -607,7 +607,7 @@
 const CONFIG_PIN = '2108';
 // Identificador de versión visible en pantalla (Config), para confirmar de
 // un vistazo si el dispositivo está usando el archivo más reciente.
-const APP_BUILD = '2026-08-10.2 (fix carrera en sincronizacion de cola)';
+const APP_BUILD = '2026-08-10.3 (OLPN por ISO bajo demanda)';
 const LS_URL = 'aa_apps_script_url';
 // Guarda en localStorage sin romper el flujo si se excede la cuota del
 // navegador (~5-10MB). Antes, un error de "quota exceeded" al cachear
@@ -659,6 +659,26 @@ let _queueCache = null; // caché en memoria de la cola local (evita relecturas/
 let olpnPorIsoIndex = {};       // iso -> [olpn, olpn, ...] (con duplicados = cantidad)
 let olpnUnicosPorIsoIndex = {}; // iso -> [{olpn, cantidad}]
 let olpnAuditadosPorIsoIndex = {}; // iso -> [{olpn, fecha, ...}, ...]
+let isosOlpnCargadas = new Set(); // qué ISOs ya tienen sus OLPN descargadas en esta sesión
+
+// Pide las OLPN de UNA ISO puntual al servidor, frescas, en vez de depender
+// del paquete grande de sincronización (que con catálogos enormes podía
+// llegar incompleto). Se cachea en memoria por ISO para no repetir la
+// petición si el usuario vuelve a abrir la misma ISO.
+async function cargarOlpnDeIso(iso, forzar){
+  if (!forzar && isosOlpnCargadas.has(iso)) return true;
+  try {
+    const r = await jsonpRequest({ action: 'olpnPorIso', iso });
+    if (!r.ok) return false;
+    olpnMaestro = olpnMaestro.filter(o => normalizarCodigo(o.iso) !== iso).concat(r.data);
+    isosOlpnCargadas.add(iso);
+    reindexOlpnMaestro();
+    return true;
+  } catch (err) {
+    console.error('[cargarOlpnDeIso] Error cargando OLPN de ISO ' + iso + ':', err);
+    return false;
+  }
+}
 
 function reindexOlpnMaestro(){
   olpnPorIsoIndex = {};
@@ -863,7 +883,8 @@ async function sincronizar(manual){
     // localStorage, y se vuelve a descargar en cada sincronización de
     // todas formas. Se deja solo en memoria (no en caché) para no competir
     // por espacio con la cola de escaneos pendientes, que sí es crítica.
-    olpnMaestro = d.olpnMaestro; reindexOlpnMaestro();
+    // El catálogo de OLPN ya no viene en este paquete (se carga aparte, por
+    // ISO, bajo demanda) — no tocar aquí para no perder lo ya cargado.
     olpnAuditados = d.olpnAuditados; guardarCache(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados)); reindexOlpnAuditados();
     ultimoRangoSincronizado = d.rangoFechas || [];
 
@@ -877,9 +898,29 @@ async function sincronizar(manual){
     if (document.getElementById('tab-dashboard').style.display !== 'none') renderDashboard();
     if (manual) toast('Datos actualizados', 'ok');
     flushQueue();
+    cargarOlpnParaDashboard(); // en segundo plano, no se espera ni bloquea nada de lo anterior
   } catch (err) {
     console.error('[sincronizar] Falló la sincronización:', err);
     if (manual) toast('No se pudo conectar: ' + (err && err.message ? err.message : err), 'err');
+  }
+}
+
+// Trae, en segundo plano, todas las OLPN de las ISOs de la ventana
+// sincronizada — solo para que las cifras del Dashboard dentro de la app
+// (Total OLPN, % avance) sean exactas. Si falla o tarda, no importa: el
+// escaneo de ISOs individuales ya funciona con cargarOlpnDeIso() aparte.
+async function cargarOlpnParaDashboard(){
+  try {
+    const r = await jsonpRequest({ action: 'olpnDelRango' });
+    if (!r.ok) return;
+    const porIso = {};
+    r.data.forEach(o => { (porIso[normalizarCodigo(o.iso)] = porIso[normalizarCodigo(o.iso)] || []).push(o); });
+    Object.keys(porIso).forEach(iso => isosOlpnCargadas.add(iso));
+    olpnMaestro = r.data;
+    reindexOlpnMaestro();
+    if (document.getElementById('tab-dashboard').style.display !== 'none') renderDashboard();
+  } catch (err) {
+    console.warn('[cargarOlpnParaDashboard] No se pudo cargar en segundo plano:', err);
   }
 }
 
@@ -1170,10 +1211,15 @@ function procesarScanIso(raw){
 }
 
 /* ===================== NAVEGACIÓN A DETALLE DE ISO (nivel 1) ===================== */
-function abrirDetalleIso(iso){
+async function abrirDetalleIso(iso){
   isoActual = iso;
   document.getElementById('iso-list-card').style.display = 'none';
   document.getElementById('iso-detalle-card').style.display = '';
+  if (!isosOlpnCargadas.has(iso)) {
+    document.getElementById('olpn-list').innerHTML = '<div class="empty">⏳ Cargando OLPN de esta ISO...</div>';
+  }
+  const ok = await cargarOlpnDeIso(iso);
+  if (!ok) toast('⚠️ No se pudieron cargar las OLPN de esta ISO. Revisa tu conexión.', 'err');
   renderDetalleIso();
   document.getElementById('olpn-scan-input').focus();
 }
