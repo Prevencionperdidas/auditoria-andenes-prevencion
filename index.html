@@ -607,7 +607,7 @@
 const CONFIG_PIN = '2108';
 // Identificador de versión visible en pantalla (Config), para confirmar de
 // un vistazo si el dispositivo está usando el archivo más reciente.
-const APP_BUILD = '2026-08-10.4 (diagnostico de pendientes con error)';
+const APP_BUILD = '2026-08-12.1 (envio de cola en lotes)';
 const LS_URL = 'aa_apps_script_url';
 // Guarda en localStorage sin romper el flujo si se excede la cuota del
 // navegador (~5-10MB). Antes, un error de "quota exceeded" al cachear
@@ -1415,51 +1415,56 @@ function renderIncidenciasDeVehiculo(){
 // servidor, por eso reaparecía como "auditada" en la siguiente sincronización).
 let flushEnProgreso = false;
 let flushReintentoPendiente = false;
+// Envía la cola de pendientes en LOTES (varios escaneos por petición) en
+// vez de uno a la vez. Con miles de escaneos acumulados (p. ej. por un
+// corte de conexión largo), enviar uno por uno podía tardar más de una
+// hora en ponerse al día; en lotes de 20 tarda minutos.
+const TAMANO_LOTE = 20;
 async function flushQueue(){
   if (!getUrl()) return;
   if (flushEnProgreso) { flushReintentoPendiente = true; return; }
   flushEnProgreso = true;
+  let conectividadOk = true;
   try {
     let q = queueLocal();
     if (!q.length) return;
+
+    const lote = q.slice(0, TAMANO_LOTE);
+    const resto = q.slice(TAMANO_LOTE);
     const restante = [];
-    for (const item of q) {
-      try {
-        if (item.kind === 'incidencia') {
-          const r = await jsonpRequest({
-            action: 'registrarIncidencia',
-            fecha: item.fecha, anden: item.anden, vehiculo: item.vehiculo,
-            tipo: item.tipo, codigo: item.codigo, cantidad: item.cantidad,
-            descripcion: item.descripcion, auditor: item.auditor
-          });
-          if (!r.ok) { item.ultimoError = r.error || 'ERROR_DESCONOCIDO'; item.ultimoIntento = new Date().toISOString(); restante.push(item); }
-        } else if (item.kind === 'olpn') {
-          const r = await jsonpRequest({ action: 'registrarOlpn', iso: item.iso, olpn: item.olpn, vehiculo: item.vehiculo, fecha: item.fecha, anden: item.anden, auditor: item.auditor });
-          if (r.ok) {
-            olpnAuditados.push({ iso: item.iso, olpn: item.olpn, vehiculo: item.vehiculo, fecha: item.fecha, anden: item.anden, fechaHora: item.fechaHora, auditor: item.auditor });
-          } else if (r.error === 'YA_AUDITADA') {
+
+    try {
+      const r = await jsonpRequest({ action: 'registrarLote', items: JSON.stringify(lote) });
+      if (!r.ok) {
+        lote.forEach(item => { item.ultimoError = r.error || 'ERROR_LOTE'; item.ultimoIntento = new Date().toISOString(); restante.push(item); });
+      } else {
+        r.data.forEach(res => {
+          const item = lote[res.idx];
+          if (!item) return;
+          if (res.ok) {
+            if (item.kind === 'olpn') {
+              olpnAuditados.push({ iso: item.iso, olpn: item.olpn, vehiculo: item.vehiculo, fecha: item.fecha, anden: item.anden, fechaHora: item.fechaHora, auditor: item.auditor });
+            } else if (item.kind !== 'incidencia') {
+              auditados.push({ vehiculo: item.vehiculo, iso: item.iso, fecha: item.fecha, anden: item.anden, fechaHora: item.fechaHora, auditor: item.auditor });
+            }
+          } else if (res.error === 'YA_AUDITADA') {
             // ya estaba, no reintenta
           } else {
-            item.ultimoError = r.error || 'ERROR_DESCONOCIDO'; item.ultimoIntento = new Date().toISOString();
+            item.ultimoError = res.error || 'ERROR_DESCONOCIDO';
+            item.ultimoIntento = new Date().toISOString();
             restante.push(item);
           }
-        } else {
-          const r = await jsonpRequest({ action: 'registrar', vehiculo: item.vehiculo, iso: item.iso, auditor: item.auditor, fecha: item.fecha, anden: item.anden });
-          if (r.ok) {
-            auditados.push({ vehiculo: item.vehiculo, iso: item.iso, fecha: item.fecha, anden: item.anden, fechaHora: item.fechaHora, auditor: item.auditor });
-          } else if (r.error === 'YA_AUDITADA') {
-            // ya estaba, no reintenta
-          } else {
-            item.ultimoError = r.error || 'ERROR_DESCONOCIDO'; item.ultimoIntento = new Date().toISOString();
-            restante.push(item);
-          }
-        }
-      } catch (err) {
-        item.ultimoError = 'RED: ' + (err && err.message ? err.message : err); item.ultimoIntento = new Date().toISOString();
-        restante.push(item);
+        });
       }
+    } catch (err) {
+      // Falló la conexión del lote completo: no reintentar en cadena
+      // inmediatamente (evita machacar la red sin pausa); se reintentará en
+      // la próxima sincronización periódica o manual.
+      conectividadOk = false;
+      lote.forEach(item => { item.ultimoError = 'RED: ' + (err && err.message ? err.message : err); item.ultimoIntento = new Date().toISOString(); restante.push(item); });
     }
-    saveQueueLocal(restante);
+
+    saveQueueLocal(restante.concat(resto));
     guardarCache(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
     guardarCache(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados));
     reindexOlpnAuditados();
@@ -1471,9 +1476,11 @@ async function flushQueue(){
     }
   } finally {
     flushEnProgreso = false;
-    if (flushReintentoPendiente) {
+    if (conectividadOk && queueLocal().length > 0) {
+      flushQueue(); // sigue con el siguiente lote automáticamente mientras haya conexión
+    } else if (flushReintentoPendiente) {
       flushReintentoPendiente = false;
-      flushQueue(); // procesa lo que se haya agregado mientras tanto, con la cola ya actualizada
+      flushQueue();
     }
   }
 }
