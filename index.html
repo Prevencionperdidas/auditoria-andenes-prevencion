@@ -607,7 +607,7 @@
 const CONFIG_PIN = '2108';
 // Identificador de versión visible en pantalla (Config), para confirmar de
 // un vistazo si el dispositivo está usando el archivo más reciente.
-const APP_BUILD = '2026-08-10.3 (OLPN por ISO bajo demanda)';
+const APP_BUILD = '2026-08-10.4 (diagnostico de pendientes con error)';
 const LS_URL = 'aa_apps_script_url';
 // Guarda en localStorage sin romper el flujo si se excede la cuota del
 // navegador (~5-10MB). Antes, un error de "quota exceeded" al cachear
@@ -816,13 +816,27 @@ function renderDiagnostico(){
   const el = document.getElementById('config-diagnostico');
   if (!el) return;
   const isosConOlpn = Object.keys(olpnPorIsoIndex).length;
+  const pendientes = queueLocal();
+  let pendientesHtml = '';
+  if (pendientes.length) {
+    pendientesHtml = '<br><b style="color:#D33A2C">⚠ ' + pendientes.length + ' escaneo(s) sin sincronizar:</b><br>' +
+      pendientes.slice(0, 8).map(p => {
+        const detalle = p.kind === 'olpn' ? ('OLPN ' + p.olpn + ' (ISO ' + p.iso + ')') :
+                        p.kind === 'incidencia' ? ('Incidencia ' + p.tipo) : ('ISO ' + p.iso);
+        const fecha = p.fecha || '(sin fecha)';
+        const error = p.ultimoError ? (' — <span style="color:#D33A2C">' + p.ultimoError + '</span>') : ' — aún no se ha intentado enviar';
+        return '&nbsp;&nbsp;• ' + fecha + ' · ' + p.vehiculo + ' · ' + detalle + error;
+      }).join('<br>') +
+      (pendientes.length > 8 ? '<br>&nbsp;&nbsp;… y ' + (pendientes.length - 8) + ' más' : '');
+  }
   el.innerHTML =
     '<b>Datos cargados actualmente:</b><br>' +
     (ultimoRangoSincronizado.length ? '• Rango sincronizado: ' + ultimoRangoSincronizado.join(', ') + '<br>' : '') +
     '• ISOs (maestro): ' + maestro.length + '<br>' +
     '• OLPN cargadas: ' + olpnMaestro.length + ' (en ' + isosConOlpn + ' ISOs distintas)<br>' +
     '• OLPN auditadas: ' + olpnAuditados.length + '<br>' +
-    '• Incidencias: ' + incidencias.length;
+    '• Incidencias: ' + incidencias.length +
+    pendientesHtml;
 }
 function saveConfig(){
   const url = document.getElementById('config-url-input').value.trim();
@@ -1418,7 +1432,7 @@ async function flushQueue(){
             tipo: item.tipo, codigo: item.codigo, cantidad: item.cantidad,
             descripcion: item.descripcion, auditor: item.auditor
           });
-          if (!r.ok) restante.push(item);
+          if (!r.ok) { item.ultimoError = r.error || 'ERROR_DESCONOCIDO'; item.ultimoIntento = new Date().toISOString(); restante.push(item); }
         } else if (item.kind === 'olpn') {
           const r = await jsonpRequest({ action: 'registrarOlpn', iso: item.iso, olpn: item.olpn, vehiculo: item.vehiculo, fecha: item.fecha, anden: item.anden, auditor: item.auditor });
           if (r.ok) {
@@ -1426,6 +1440,7 @@ async function flushQueue(){
           } else if (r.error === 'YA_AUDITADA') {
             // ya estaba, no reintenta
           } else {
+            item.ultimoError = r.error || 'ERROR_DESCONOCIDO'; item.ultimoIntento = new Date().toISOString();
             restante.push(item);
           }
         } else {
@@ -1435,10 +1450,12 @@ async function flushQueue(){
           } else if (r.error === 'YA_AUDITADA') {
             // ya estaba, no reintenta
           } else {
+            item.ultimoError = r.error || 'ERROR_DESCONOCIDO'; item.ultimoIntento = new Date().toISOString();
             restante.push(item);
           }
         }
       } catch (err) {
+        item.ultimoError = 'RED: ' + (err && err.message ? err.message : err); item.ultimoIntento = new Date().toISOString();
         restante.push(item);
       }
     }
@@ -1446,6 +1463,7 @@ async function flushQueue(){
     guardarCache(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
     guardarCache(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados));
     reindexOlpnAuditados();
+    renderDiagnostico();
     if (vehiculoActual) {
       renderVehiculoDetail(vehiculoActual);
       renderIncidenciasDeVehiculo();
