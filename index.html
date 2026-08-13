@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html><!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -545,6 +545,7 @@
       <button class="btn btn-secondary btn-block" style="margin-top:10px;" onclick="probarConexion()">🔌 Probar conexión ahora</button>
       <div id="config-test-resultado" style="margin-top:8px; font-size:12px; line-height:1.5; white-space:pre-wrap;"></div>
       <div id="config-diagnostico" style="margin-top:12px; font-size:12px; color:#4a5a68; background:#F5F8FC; border:1px solid #DCE4EC; border-radius:8px; padding:10px 12px; line-height:1.6;"></div>
+      <button class="btn btn-secondary btn-block" style="margin-top:8px; display:none;" id="btn-descartar-pendientes" onclick="descartarPendientesInvalidos()">🗑️ Descartar pendientes que ya no corresponden</button>
       <div style="margin-top:8px; font-size:10px; color:#9aa7b3; text-align:center;">Versión de la app: <b id="config-version"></b></div>
       <div class="row-gap" style="margin-top:14px;">
         <button class="btn btn-secondary btn-block" onclick="closeConfig()">Cancelar</button>
@@ -607,7 +608,7 @@
 const CONFIG_PIN = '2108';
 // Identificador de versión visible en pantalla (Config), para confirmar de
 // un vistazo si el dispositivo está usando el archivo más reciente.
-const APP_BUILD = '2026-08-12.1 (envio de cola en lotes)';
+const APP_BUILD = '2026-08-13.1 (descartar pendientes obsoletos)';
 const LS_URL = 'aa_apps_script_url';
 // Guarda en localStorage sin romper el flujo si se excede la cuota del
 // navegador (~5-10MB). Antes, un error de "quota exceeded" al cachear
@@ -812,11 +813,16 @@ async function probarConexion(){
 // Contador simple para verificar, sin abrir la consola, si los datos
 // realmente llegaron a la app (útil para diagnosticar "no cargan las OLPN").
 let ultimoRangoSincronizado = [];
+// Errores que NUNCA se van a resolver reintentando (el dato de referencia ya
+// no existe o no coincide) — a diferencia de errores de red/timeout, que sí
+// tiene sentido reintentar más tarde.
+const ERRORES_PERMANENTES = ['OLPN_NO_CORRESPONDE', 'ISO_NO_CORRESPONDE', 'DATOS_INCOMPLETOS'];
 function renderDiagnostico(){
   const el = document.getElementById('config-diagnostico');
   if (!el) return;
   const isosConOlpn = Object.keys(olpnPorIsoIndex).length;
   const pendientes = queueLocal();
+  const permanentes = pendientes.filter(p => ERRORES_PERMANENTES.includes(p.ultimoError));
   let pendientesHtml = '';
   if (pendientes.length) {
     pendientesHtml = '<br><b style="color:#D33A2C">⚠ ' + pendientes.length + ' escaneo(s) sin sincronizar:</b><br>' +
@@ -828,6 +834,9 @@ function renderDiagnostico(){
         return '&nbsp;&nbsp;• ' + fecha + ' · ' + p.vehiculo + ' · ' + detalle + error;
       }).join('<br>') +
       (pendientes.length > 8 ? '<br>&nbsp;&nbsp;… y ' + (pendientes.length - 8) + ' más' : '');
+    if (permanentes.length) {
+      pendientesHtml += '<br><br><b style="color:#9A4300">⚠ ' + permanentes.length + ' de estos ya no se pueden sincronizar</b> (el dato de referencia cambió — normalmente porque son de una fecha vieja y la hoja "OLPN" ya se actualizó con datos nuevos). Puedes descartarlos con el botón de abajo.';
+    }
   }
   el.innerHTML =
     '<b>Datos cargados actualmente:</b><br>' +
@@ -837,6 +846,22 @@ function renderDiagnostico(){
     '• OLPN auditadas: ' + olpnAuditados.length + '<br>' +
     '• Incidencias: ' + incidencias.length +
     pendientesHtml;
+
+  const btn = document.getElementById('btn-descartar-pendientes');
+  if (btn) {
+    btn.style.display = permanentes.length ? '' : 'none';
+    btn.textContent = '🗑️ Descartar ' + permanentes.length + ' pendiente(s) que ya no corresponden';
+  }
+}
+function descartarPendientesInvalidos(){
+  const pendientes = queueLocal();
+  const permanentes = pendientes.filter(p => ERRORES_PERMANENTES.includes(p.ultimoError));
+  if (!permanentes.length) return;
+  if (!confirm('Vas a descartar ' + permanentes.length + ' escaneo(s) que ya no se pueden sincronizar (dato de referencia desactualizado). Esto NO se puede deshacer. ¿Continuar?')) return;
+  const restantes = pendientes.filter(p => !ERRORES_PERMANENTES.includes(p.ultimoError));
+  saveQueueLocal(restantes);
+  renderDiagnostico();
+  toast('Pendientes descartados', 'ok');
 }
 function saveConfig(){
   const url = document.getElementById('config-url-input').value.trim();
