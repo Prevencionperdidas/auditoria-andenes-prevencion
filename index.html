@@ -608,7 +608,7 @@
 const CONFIG_PIN = '2108';
 // Identificador de versión visible en pantalla (Config), para confirmar de
 // un vistazo si el dispositivo está usando el archivo más reciente.
-const APP_BUILD = '2026-08-19.1 (respaldo si la fecha no tiene datos)';
+const APP_BUILD = '2026-08-19.2 (reintentos OLPN + dashboard en vivo)';
 const LS_URL = 'aa_apps_script_url';
 // Guarda en localStorage sin romper el flujo si se excede la cuota del
 // navegador (~5-10MB). Antes, un error de "quota exceeded" al cachear
@@ -668,17 +668,26 @@ let isosOlpnCargadas = new Set(); // qué ISOs ya tienen sus OLPN descargadas en
 // petición si el usuario vuelve a abrir la misma ISO.
 async function cargarOlpnDeIso(iso, forzar){
   if (!forzar && isosOlpnCargadas.has(iso)) return true;
-  try {
-    const r = await jsonpRequest({ action: 'olpnPorIso', iso });
-    if (!r.ok) return false;
-    olpnMaestro = olpnMaestro.filter(o => normalizarCodigo(o.iso) !== iso).concat(r.data);
-    isosOlpnCargadas.add(iso);
-    reindexOlpnMaestro();
-    return true;
-  } catch (err) {
-    console.error('[cargarOlpnDeIso] Error cargando OLPN de ISO ' + iso + ':', err);
-    return false;
+  // Reintenta unas veces con una pequeña espera entre intento e intento: un
+  // solo tropiezo de red al abrir la ISO no debería dejarla sin datos de
+  // referencia para todo el resto del escaneo (eso hacía que los OLPN se
+  // rechazaran en silencio, pareciendo que "fallaba" sin motivo aparente).
+  const INTENTOS = 3;
+  for (let intento = 1; intento <= INTENTOS; intento++) {
+    try {
+      const r = await jsonpRequest({ action: 'olpnPorIso', iso });
+      if (r.ok) {
+        olpnMaestro = olpnMaestro.filter(o => normalizarCodigo(o.iso) !== iso).concat(r.data);
+        isosOlpnCargadas.add(iso);
+        reindexOlpnMaestro();
+        return true;
+      }
+    } catch (err) {
+      console.error('[cargarOlpnDeIso] Intento ' + intento + '/' + INTENTOS + ' falló para ISO ' + iso + ':', err);
+    }
+    if (intento < INTENTOS) await new Promise(res => setTimeout(res, 800 * intento));
   }
+  return false;
 }
 
 function reindexOlpnMaestro(){
@@ -1353,6 +1362,14 @@ async function procesarScanOlpn(raw){
   if (!v || !iso) return;
   if (!fechaActual) { toast('Primero selecciona la fecha a auditar', 'err'); return; }
 
+  // Si esta ISO nunca llegó a cargar sus OLPN de referencia (por ejemplo,
+  // un corte de señal justo al abrirla), se reintenta antes de decidir que
+  // "no tiene OLPN" — evita rechazar escaneos válidos solo porque ese dato
+  // nunca alcanzó a descargarse la primera vez.
+  if (!isosOlpnCargadas.has(iso)) {
+    await cargarOlpnDeIso(iso, true);
+  }
+
   const auditor = (document.getElementById('auditor-input').value || 'SIN NOMBRE').trim().toUpperCase();
   const p = progresoIso(v, iso);
 
@@ -1532,6 +1549,7 @@ async function flushQueue(){
       renderIncidenciasDeVehiculo();
       if (isoActual) renderDetalleIso();
     }
+    if (document.getElementById('tab-dashboard').style.display !== 'none') renderDashboard();
   } finally {
     flushEnProgreso = false;
     if (conectividadOk && queueLocal().length > 0) {
