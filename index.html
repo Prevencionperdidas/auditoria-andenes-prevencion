@@ -908,6 +908,26 @@ function jsonpRequest(params){
 }
 
 /* ===================== SINCRONIZACIÓN ===================== */
+// Combina lo que ya está confirmado en memoria (por ejemplo, por un
+// flushQueue() que terminó DESPUÉS de que se pidió esta sincronización)
+// con lo que trae el servidor, en vez de reemplazar a ciegas. Esto es lo
+// que evita el bug de "se pierde el avance": antes, si la sincronización
+// automática (cada 20s) llegaba con una foto ligeramente vieja mientras
+// todavía había escaneos en camino, borraba de encima progreso que ya
+// estaba bien guardado en el servidor, solo por timing de la red.
+function mergeAuditados(local, servidor){
+  const map = {};
+  local.forEach(a => { map[a.vehiculo + '|' + a.iso + '|' + a.fecha] = a; });
+  servidor.forEach(a => { map[a.vehiculo + '|' + a.iso + '|' + a.fecha] = a; });
+  return Object.values(map);
+}
+function mergeOlpnAuditados(local, servidor){
+  const map = {};
+  local.forEach(o => { map[o.iso + '|' + o.olpn + '|' + o.fecha] = o; });
+  servidor.forEach(o => { map[o.iso + '|' + o.olpn + '|' + o.fecha] = o; });
+  return Object.values(map);
+}
+
 async function sincronizar(manual){
   if (!getUrl()) { if (manual) toast('Configura primero la URL en ⚙️ Config', 'err'); return; }
   try {
@@ -916,7 +936,7 @@ async function sincronizar(manual){
     const d = r.data;
 
     maestro = d.maestro; guardarCache(LS_MAESTRO_CACHE, JSON.stringify(maestro));
-    auditados = d.auditados; guardarCache(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
+    auditados = mergeAuditados(auditados, d.auditados); guardarCache(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
     incidencias = d.incidencias; guardarCache(LS_INCIDENCIAS_CACHE, JSON.stringify(incidencias));
     // El catálogo de OLPN es, con diferencia, lo más pesado para guardar en
     // localStorage, y se vuelve a descargar en cada sincronización de
@@ -924,7 +944,7 @@ async function sincronizar(manual){
     // por espacio con la cola de escaneos pendientes, que sí es crítica.
     // El catálogo de OLPN ya no viene en este paquete (se carga aparte, por
     // ISO, bajo demanda) — no tocar aquí para no perder lo ya cargado.
-    olpnAuditados = d.olpnAuditados; guardarCache(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados)); reindexOlpnAuditados();
+    olpnAuditados = mergeOlpnAuditados(olpnAuditados, d.olpnAuditados); guardarCache(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados)); reindexOlpnAuditados();
     ultimoRangoSincronizado = d.rangoFechas || [];
     if (d.usoRespaldoFecha) {
       toast('⚠️ La fecha de hoy/mañana no tenía datos — mostrando ' + (d.rangoFechas ? d.rangoFechas[0] : 'la fecha más cercana disponible'), 'err');
@@ -1458,41 +1478,51 @@ async function flushQueue(){
     if (!q.length) return;
 
     const lote = q.slice(0, TAMANO_LOTE);
-    const resto = q.slice(TAMANO_LOTE);
-    const restante = [];
+    // OJO: 'paraQuitar' guarda REFERENCIAS a los objetos del lote que ya se
+    // pueden sacar de la cola (éxito o "ya auditada"). NO se usa una copia
+    // del resto de la cola tomada al principio, porque si el usuario sigue
+    // escaneando mientras esta petición está en camino (red lenta), esa
+    // copia queda vieja y al guardar seguido borraría los escaneos nuevos
+    // que se agregaron mientras tanto — ese era el bug de "se pierde el
+    // avance". En vez de eso, al final se relee la cola ACTUAL y solo se
+    // quitan los items específicos de este lote que ya se resolvieron.
+    const paraQuitar = new Set();
 
     try {
       const r = await jsonpRequest({ action: 'registrarLote', items: JSON.stringify(lote) });
       if (!r.ok) {
-        lote.forEach(item => { item.ultimoError = r.error || 'ERROR_LOTE'; item.ultimoIntento = new Date().toISOString(); restante.push(item); });
+        lote.forEach(item => { item.ultimoError = r.error || 'ERROR_LOTE'; item.ultimoIntento = new Date().toISOString(); });
       } else {
         r.data.forEach(res => {
           const item = lote[res.idx];
           if (!item) return;
           if (res.ok) {
+            paraQuitar.add(item);
             if (item.kind === 'olpn') {
               olpnAuditados.push({ iso: item.iso, olpn: item.olpn, vehiculo: item.vehiculo, fecha: item.fecha, anden: item.anden, fechaHora: item.fechaHora, auditor: item.auditor });
             } else if (item.kind !== 'incidencia') {
               auditados.push({ vehiculo: item.vehiculo, iso: item.iso, fecha: item.fecha, anden: item.anden, fechaHora: item.fechaHora, auditor: item.auditor });
             }
           } else if (res.error === 'YA_AUDITADA') {
-            // ya estaba, no reintenta
+            paraQuitar.add(item); // ya estaba, no reintenta, se saca de la cola igual
           } else {
             item.ultimoError = res.error || 'ERROR_DESCONOCIDO';
             item.ultimoIntento = new Date().toISOString();
-            restante.push(item);
           }
         });
       }
     } catch (err) {
       // Falló la conexión del lote completo: no reintentar en cadena
       // inmediatamente (evita machacar la red sin pausa); se reintentará en
-      // la próxima sincronización periódica o manual.
+      // la próxima sincronización periódica o manual. No se quita nada de
+      // la cola en este caso (paraQuitar queda vacío).
       conectividadOk = false;
-      lote.forEach(item => { item.ultimoError = 'RED: ' + (err && err.message ? err.message : err); item.ultimoIntento = new Date().toISOString(); restante.push(item); });
+      lote.forEach(item => { item.ultimoError = 'RED: ' + (err && err.message ? err.message : err); item.ultimoIntento = new Date().toISOString(); });
     }
 
-    saveQueueLocal(restante.concat(resto));
+    const colaActual = queueLocal(); // estado FRESCO, incluye cualquier escaneo agregado mientras esta petición estaba en curso
+    const colaFinal = colaActual.filter(item => !paraQuitar.has(item));
+    saveQueueLocal(colaFinal);
     guardarCache(LS_AUDITADOS_CACHE, JSON.stringify(auditados));
     guardarCache(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados));
     reindexOlpnAuditados();
