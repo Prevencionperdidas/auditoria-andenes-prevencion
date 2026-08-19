@@ -1,4 +1,4 @@
-<!DOCTYPE html><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -608,7 +608,7 @@
 const CONFIG_PIN = '2108';
 // Identificador de versión visible en pantalla (Config), para confirmar de
 // un vistazo si el dispositivo está usando el archivo más reciente.
-const APP_BUILD = '2026-08-13.1 (descartar pendientes obsoletos)';
+const APP_BUILD = '2026-08-19.1 (respaldo si la fecha no tiene datos)';
 const LS_URL = 'aa_apps_script_url';
 // Guarda en localStorage sin romper el flujo si se excede la cuota del
 // navegador (~5-10MB). Antes, un error de "quota exceeded" al cachear
@@ -926,6 +926,9 @@ async function sincronizar(manual){
     // ISO, bajo demanda) — no tocar aquí para no perder lo ya cargado.
     olpnAuditados = d.olpnAuditados; guardarCache(LS_OLPN_AUDITADOS_CACHE, JSON.stringify(olpnAuditados)); reindexOlpnAuditados();
     ultimoRangoSincronizado = d.rangoFechas || [];
+    if (d.usoRespaldoFecha) {
+      toast('⚠️ La fecha de hoy/mañana no tenía datos — mostrando ' + (d.rangoFechas ? d.rangoFechas[0] : 'la fecha más cercana disponible'), 'err');
+    }
 
     renderFechaSelect();
     renderVehiculoSelect();
