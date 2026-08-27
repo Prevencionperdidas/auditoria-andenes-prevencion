@@ -608,7 +608,7 @@
 const CONFIG_PIN = '2108';
 // Identificador de versión visible en pantalla (Config), para confirmar de
 // un vistazo si el dispositivo está usando el archivo más reciente.
-const APP_BUILD = '2026-08-19.2 (reintentos OLPN + dashboard en vivo)';
+const APP_BUILD = '2026-08-19.3 (validacion automatica al escanear)';
 const LS_URL = 'aa_apps_script_url';
 // Guarda en localStorage sin romper el flujo si se excede la cuota del
 // navegador (~5-10MB). Antes, un error de "quota exceeded" al cachear
@@ -732,17 +732,48 @@ window.addEventListener('DOMContentLoaded', () => {
   renderFechaSelect();
   renderVehiculoSelect();
 
-  document.getElementById('olpn-scan-input').addEventListener('keydown', e => {
+  // Los lectores Zebra inyectan el código completo casi instantáneo (todos
+  // los caracteres llegan en pocos milisegundos), a diferencia de alguien
+  // tecleando a mano (con pausas naturales entre dígitos). Se aprovecha esa
+  // diferencia: si el campo deja de cambiar por un instante corto, se
+  // asume que el escaneo terminó y se valida solo, sin esperar un Enter
+  // del lector. Si de todas formas llega un Enter (o alguien lo escribe a
+  // mano y lo confirma así), se procesa al toque, sin esperar el debounce.
+  let olpnScanTimer = null;
+  const olpnScanInput = document.getElementById('olpn-scan-input');
+  olpnScanInput.addEventListener('input', e => {
+    clearTimeout(olpnScanTimer);
+    const valor = e.target.value;
+    if (!valor.trim()) return;
+    olpnScanTimer = setTimeout(() => {
+      procesarScanOlpn(valor);
+      e.target.value = '';
+    }, 300);
+  });
+  olpnScanInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      clearTimeout(olpnScanTimer);
       procesarScanOlpn(e.target.value);
       e.target.value = '';
     }
   });
 
-  document.getElementById('iso-scan-input').addEventListener('keydown', e => {
+  let isoScanTimer = null;
+  const isoScanInput = document.getElementById('iso-scan-input');
+  isoScanInput.addEventListener('input', e => {
+    clearTimeout(isoScanTimer);
+    const valor = e.target.value;
+    if (!valor.trim()) return;
+    isoScanTimer = setTimeout(() => {
+      procesarScanIso(valor);
+      e.target.value = '';
+    }, 300);
+  });
+  isoScanInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      clearTimeout(isoScanTimer);
       procesarScanIso(e.target.value);
       e.target.value = '';
     }
@@ -1408,14 +1439,13 @@ async function procesarScanOlpn(raw){
 }
 
 /* ===================== INCIDENCIAS ===================== */
-// URL del formulario compartido de "Incidencias Aduana". Se le agrega
-// ?origen=ANDENES para que ese formulario identifique que la incidencia
-// viene desde Auditoría de Andenes.
-const URL_REPORTE_INCIDENCIA_ADUANA = "https://prevencionperdidas.github.io/reporte-incidencias-aduana-wh/app_incidencias_aduana.html?origen=ANDENES";
-
 function abrirIncidencia(){
   if (!vehiculoActual || !fechaActual) { toast('Selecciona vehículo y fecha primero', 'err'); return; }
-  window.open(URL_REPORTE_INCIDENCIA_ADUANA, '_blank');
+  document.getElementById('inc-tipo').value = 'PRODUCTO SOBRANTE';
+  document.getElementById('inc-codigo').value = '';
+  document.getElementById('inc-cantidad').value = 1;
+  document.getElementById('inc-descripcion').value = '';
+  document.getElementById('incidencia-modal').style.display = 'flex';
 }
 function cerrarIncidencia(){
   document.getElementById('incidencia-modal').style.display = 'none';
