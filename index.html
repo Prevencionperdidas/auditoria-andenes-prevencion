@@ -1591,13 +1591,14 @@ async function procesarScanOlpn(raw){
 }
 
 /* ===================== INCIDENCIAS ===================== */
+// URL del formulario compartido de "Incidencias Aduana". Se le agrega
+// ?origen=ANDENES para que ese formulario identifique que la incidencia
+// viene desde Auditoría de Andenes.
+const URL_REPORTE_INCIDENCIA_ADUANA = "https://prevencionperdidas.github.io/reporte-incidencias-aduana-wh/app_incidencias_aduana.html?origen=ANDENES";
+
 function abrirIncidencia(){
   if (!vehiculoActual || !fechaActual) { toast('Selecciona vehículo y fecha primero', 'err'); return; }
-  document.getElementById('inc-tipo').value = 'PRODUCTO SOBRANTE';
-  document.getElementById('inc-codigo').value = '';
-  document.getElementById('inc-cantidad').value = 1;
-  document.getElementById('inc-descripcion').value = '';
-  document.getElementById('incidencia-modal').style.display = 'flex';
+  window.open(URL_REPORTE_INCIDENCIA_ADUANA, '_blank');
 }
 function cerrarIncidencia(){
   document.getElementById('incidencia-modal').style.display = 'none';
