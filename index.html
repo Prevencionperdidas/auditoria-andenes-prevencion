@@ -644,6 +644,11 @@
       <div id="historico-tendencia"></div>
     </div>
 
+    <div class="card" style="margin-bottom:12px;">
+      <h3>Incidencias reportadas desde Andenes — por tipo de error</h3>
+      <div id="historico-inc-tipo"></div>
+    </div>
+
     <div id="historico-estado" style="text-align:center; color:var(--muted); font-size:13px; padding:20px;"></div>
   </div>
 </div>
@@ -964,6 +969,29 @@ const PRODUCTIVIDAD_PIN = '358097';
 // combinación, no por escaneo individual) para no tener que rearmarlo cada
 // vez que se cambia el rango dentro del panel.
 let historicoDatos = [];
+// Incidencias reportadas desde Andenes (área=ANDENES), traídas del backend
+// de Incidencias Aduana. Se cargan una sola vez al abrir el histórico y
+// se filtran en el cliente cada vez que cambia el rango de fechas.
+let historicoIncidencias = [];
+const URL_INCIDENCIAS_ADUANA_API = "https://script.google.com/macros/s/AKfycbwtDxgj1A4P_jZSD_Q0xvfGOX0I86sPJxINxwF45_KXlj1t98jcEFcNzvwOdnKfCps/exec";
+
+function jsonpRequestIncidenciasAduana(){
+  return new Promise((resolve) => {
+    const cbName = 'aa_inc_cb_' + Date.now();
+    const script = document.createElement('script');
+    const timeout = setTimeout(() => { cleanup(); resolve(null); }, 15000);
+    function cleanup(){
+      window[cbName] = function(){};
+      clearTimeout(timeout);
+      if (script.parentNode) script.parentNode.removeChild(script);
+      setTimeout(() => { delete window[cbName]; }, 60000);
+    }
+    window[cbName] = (data) => { cleanup(); resolve(data); };
+    script.onerror = () => { cleanup(); resolve(null); };
+    script.src = URL_INCIDENCIAS_ADUANA_API + '?action=list&callback=' + cbName;
+    document.body.appendChild(script);
+  });
+}
 
 async function openHistorico(){
   document.getElementById('historico-overlay').style.display = 'block';
@@ -971,6 +999,7 @@ async function openHistorico(){
   document.getElementById('historico-kpis').innerHTML = '';
   document.getElementById('historico-tabla-vehiculos').innerHTML = '';
   document.getElementById('historico-tendencia').innerHTML = '';
+  document.getElementById('historico-inc-tipo').innerHTML = '<div class="empty">Cargando...</div>';
   try {
     const r = await jsonpRequest({ action: 'resumenDiario' });
     if (!r.ok) throw new Error(r.error || 'ERROR_SERVIDOR');
@@ -981,6 +1010,15 @@ async function openHistorico(){
   } catch (err) {
     document.getElementById('historico-estado').textContent = '❌ No se pudo cargar: ' + (err && err.message ? err.message : err);
   }
+  // Incidencias: se cargan aparte, sin bloquear ni afectar lo anterior si falla.
+  try {
+    const dataInc = await jsonpRequestIncidenciasAduana();
+    historicoIncidencias = (dataInc && dataInc.records) ? dataInc.records.filter(r => r.area === 'ANDENES') : [];
+  } catch (err) {
+    historicoIncidencias = [];
+    console.warn('[openHistorico] No se pudieron cargar incidencias:', err);
+  }
+  renderHistoricoIncidencias();
 }
 function closeHistorico(){ document.getElementById('historico-overlay').style.display = 'none'; }
 
@@ -999,6 +1037,7 @@ function renderHistoricoRango(){
   const desde = document.getElementById('historico-desde').value;
   const hasta = document.getElementById('historico-hasta').value;
   const filas = historicoDatos.filter(f => (!desde || f.fecha >= desde) && (!hasta || f.fecha <= hasta));
+  renderHistoricoIncidencias();
 
   const totalCargadas = filas.reduce((s, f) => s + f.olpnCargadas, 0);
   const totalAuditadas = filas.reduce((s, f) => s + f.olpnAuditadas, 0);
@@ -1074,6 +1113,21 @@ function renderHistoricoTendencia(desde, hasta){
       <div style="width:38px; font-size:11px; font-weight:700; text-align:right;">${pct}%</div>
     </div>`;
   }).join('');
+}
+
+function renderHistoricoIncidencias(){
+  const desde = document.getElementById('historico-desde').value;
+  const hasta = document.getElementById('historico-hasta').value;
+  const filas = historicoIncidencias.filter(r => {
+    const f = new Date(r.timestamp).toISOString().slice(0,10);
+    return (!desde || f >= desde) && (!hasta || f <= hasta);
+  });
+  const porTipo = {};
+  filas.forEach(r => {
+    const tipo = r.tipoError || 'SIN TIPO';
+    porTipo[tipo] = (porTipo[tipo]||0) + (Number(r.cantidad)||1);
+  });
+  renderBarras('historico-inc-tipo', porTipo, 'var(--orange)');
 }
 
 function openProductividad(){
